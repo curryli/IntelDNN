@@ -1,0 +1,3 @@
+related_ins_tp, card_media_proc_md,expire_seg,cdhd_fee_conv_rt,cdhd_fee_acct_curr_cd,
+exp_snd_chnl,confirm_exp_chnl,conv_dt,orig_trans_id_conv,orig_card_media_proc_md,settle_trans_id,
+alt_cycle_no,disc_cd,spec_mcc_in,corr_alt_cycle_no,orig_disc_in
