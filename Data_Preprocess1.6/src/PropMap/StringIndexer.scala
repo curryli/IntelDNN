@@ -30,7 +30,7 @@ import org.apache.spark.ml.clustering.KMeans
  
 
 
-object  Kmeans_ml{
+object  StringIndexer{
   def main(args: Array[String]): Unit = {
 
     Logger.getLogger("org").setLevel(Level.ERROR);
@@ -43,6 +43,8 @@ object  Kmeans_ml{
     val hc = new HiveContext(sc)
     val sqlContext = new SQLContext(sc)
      
+   val startTime = System.currentTimeMillis(); 
+   
     var transdata = hc.sql(s"select settle_tp,settle_cycle,block_id,trans_fwd_st,trans_rcv_st,sms_dms_conv_in,cross_dist_in,tfr_in_in,trans_md,source_region_cd,dest_region_cd,cups_card_in,cups_sig_card_in,card_class,card_attr,acq_ins_tp,fwd_ins_tp,rcv_ins_tp,iss_ins_tp,acpt_ins_tp,resp_cd1,resp_cd2,resp_cd3,resp_cd4,cu_trans_st,sti_takeout_in,trans_id,trans_tp,trans_chnl,card_media,card_brand,trans_id_conv,trans_curr_cd,conn_md,msg_tp,msg_tp_conv,card_bin,related_card_bin,trans_proc_cd,trans_proc_cd_conv,mchnt_tp,pos_entry_md_cd,card_seq,pos_cond_cd,pos_cond_cd_conv,term_tp,rsn_cd,addn_pos_inf,orig_msg_tp,orig_msg_tp_conv,related_trans_id,related_trans_chnl,orig_trans_id,orig_trans_chnl,orig_card_media,spec_settle_in,iss_ds_settle_in,acq_ds_settle_in,upd_in,exp_rsn_cd,pri_cycle_no,corr_pri_cycle_no,disc_in,orig_disc_curr_cd,fwd_settle_conv_rt,rcv_settle_conv_rt,fwd_settle_curr_cd,rcv_settle_curr_cd,sp_mchnt_cd,trans_media, " +    //mchnt_cd,
       s"substring(acq_ins_id_cd,1,4) as acq_ins_id_cd_BK, substring(acq_ins_id_cd,5,4) as acq_ins_id_cd_RG, " + 
       s"substring(fwd_ins_id_cd,1,4) as fwd_ins_id_cd_BK, substring(fwd_ins_id_cd,5,4) as fwd_ins_id_cd_RG, " + 
@@ -53,8 +55,9 @@ object  Kmeans_ml{
       s"substring(settle_fwd_ins_id_cd,1,4) as settle_fwd_ins_id_cd_BK, substring(settle_fwd_ins_id_cd,5,4) as settle_fwd_ins_id_cd_RG, " + 
       s"substring(settle_rcv_ins_id_cd,1,4) as settle_rcv_ins_id_cd_BK, substring(settle_rcv_ins_id_cd,5,4) as settle_rcv_ins_id_cd_RG, " + 
       s"substring(acct_ins_id_cd,1,4) as acct_ins_id_cd_BK, substring(acct_ins_id_cd,5,4) as acct_ins_id_cd_RG " +
-	    s"from tbl_common_his_trans where pdate=20160701 and substring(acpt_ins_id_cd,5,2)=39 ") 
+	    s"from tbl_common_his_trans where pdate=20160701 and substring(acpt_ins_id_cd,5,4)=3940 ") 
   
+	    println("SQL done in " + (System.currentTimeMillis()-startTime)/(1000*60) + " minutes." )  
 	    //println(transdata.columns.length)
       println("transdata.count is: " + transdata.count())
       
@@ -75,7 +78,7 @@ object  Kmeans_ml{
         transdata = transdata.withColumn(newcol, udf_replaceEmpty(transdata(oldcol)))
         //transdata = transdata.drop(oldcol)
      }
-     println("NANs filled done.")
+     println("NaNs filled done in " + (System.currentTimeMillis()-startTime)/(1000*60) + " minutes." )  
      
      var i = 0
      for(oldcol <- DisperseArr){   
@@ -84,13 +87,13 @@ object  Kmeans_ml{
         val newcol = oldcol + "_filled" 
         var indexCat = oldcol + "_indexedCat"
         var indexer = new StringIndexer().setInputCol(newcol).setOutputCol(indexCat).setHandleInvalid("skip")
-        var indexeddata = indexer.fit(transdata).transform(transdata)
-        var VecCat = oldcol + "_CatVec"
-        var encoder = new OneHotEncoder().setInputCol(indexCat).setOutputCol(VecCat).setDropLast(false)
-        transdata = encoder.transform(indexeddata)     //  结果是 稀疏矩阵的表示 (192,[179],[1.0])  表示192维向量，第179位填充的是1.0， 其他都是0
+        transdata = indexer.fit(transdata).transform(transdata)
+        transdata.show(1) 
       }
       
     transdata.show(10)  
+    
+    println("StringIndexer done in " + (System.currentTimeMillis()-startTime)/(1000*60) + " minutes." )  
      
      //val CatVecArr = Array("block_id_CatVec", "source_region_cd_CatVec", "dest_region_cd_CatVec", "trans_curr_cd_CatVec","mchnt_tp_CatVec") 
     
@@ -105,7 +108,15 @@ object  Kmeans_ml{
      var vec_data = assembler1.transform(transdata)
      vec_data.select("features_Cat").show(5)
      
+     
+     val scaler2 = new MinMaxScaler().setInputCol("features_Cat").setOutputCol("scaledFeatures")
+     val MinMaxData = scaler2.fit(vec_data).transform(vec_data)
+     println("MinMaxData dataframe")
+     MinMaxData.show(10)
+     
+    println("MinMax done in " + (System.currentTimeMillis()-startTime)/(1000*60) + " minutes." )  
 
+     
      //val Ktest:Array[Int] = Array(6,8,10,12,14,16,18,20,22,24,26,28,30)
       val Ktest:Array[Int] = Array(5,10,15,20,25,30)
       
@@ -116,17 +127,19 @@ object  Kmeans_ml{
         var current_cost =  model.computeCost(vec_data)
         println("cluster kn is: " + kn + " current_cost is : " +  current_cost)
 
-//    // Shows the result.
-//    println("Cluster Centers: ")
-//    model.clusterCenters.foreach(println)
+//        // Shows the result.
+//        println("Cluster Centers: ")
+//        model.clusterCenters.foreach(println)
 //    
-//    val KmeansResult = model.transform(vec_data)
-//     println("KmeansResult: ")
-//    KmeansResult.show(10)
-     }
+//        val KmeansResult = model.transform(vec_data)
+//        println("KmeansResult: ")
+//        KmeansResult.show(10)
+        
+       println("kmeans done in " + (System.currentTimeMillis()-startTime)/(1000*60) + " minutes." )  
+}
      
     
-    
+    println("All done in " + (System.currentTimeMillis()-startTime)/(1000*60) + " minutes." )  
       
   }
   

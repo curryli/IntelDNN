@@ -1,4 +1,6 @@
 package PropMap
+//好像不行，对一个很长的数字进行onehot编码不行
+
 
 import org.apache.log4j.Level
 import org.apache.log4j.Logger
@@ -30,7 +32,7 @@ import org.apache.spark.ml.clustering.KMeans
  
 
 
-object  Kmeans_ml{
+object  HashKmeans_ml{
   def main(args: Array[String]): Unit = {
 
     Logger.getLogger("org").setLevel(Level.ERROR);
@@ -53,7 +55,7 @@ object  Kmeans_ml{
       s"substring(settle_fwd_ins_id_cd,1,4) as settle_fwd_ins_id_cd_BK, substring(settle_fwd_ins_id_cd,5,4) as settle_fwd_ins_id_cd_RG, " + 
       s"substring(settle_rcv_ins_id_cd,1,4) as settle_rcv_ins_id_cd_BK, substring(settle_rcv_ins_id_cd,5,4) as settle_rcv_ins_id_cd_RG, " + 
       s"substring(acct_ins_id_cd,1,4) as acct_ins_id_cd_BK, substring(acct_ins_id_cd,5,4) as acct_ins_id_cd_RG " +
-	    s"from tbl_common_his_trans where pdate=20160701 and substring(acpt_ins_id_cd,5,2)=39 ") 
+	    s"from tbl_common_his_trans where pdate=20160701 and substring(acpt_ins_id_cd,5,2)=39 limit 100 ") 
   
 	    //println(transdata.columns.length)
       println("transdata.count is: " + transdata.count())
@@ -62,32 +64,32 @@ object  Kmeans_ml{
           
 	   //val DisperseArr = Array("block_id", "source_region_cd", "dest_region_cd", "trans_curr_cd","mchnt_tp") 
 	    
-     val udf_replaceEmpty = udf[String, String]{xstr => 
-        if(xstr.isEmpty())
-          "NANs"
-        else
-          xstr
-      }
+ 
    
-     
+     val udf_MapHash = udf[Double, String]{xstr => 
+        if(xstr.isEmpty())
+          -999 //Double.NaN
+        else
+          BKDRHash(xstr).toDouble
+      }
+         
+    
      for(oldcol <- DisperseArr){
         val newcol = oldcol + "_filled" 
-        transdata = transdata.withColumn(newcol, udf_replaceEmpty(transdata(oldcol)))
+        transdata = transdata.withColumn(newcol, udf_MapHash(transdata(oldcol)))
         //transdata = transdata.drop(oldcol)
      }
-     println("NANs filled done.")
+     println("Hashed filled done.")
      
      var i = 0
      for(oldcol <- DisperseArr){   
         println(i)
         i = i + 1 
         val newcol = oldcol + "_filled" 
-        var indexCat = oldcol + "_indexedCat"
-        var indexer = new StringIndexer().setInputCol(newcol).setOutputCol(indexCat).setHandleInvalid("skip")
-        var indexeddata = indexer.fit(transdata).transform(transdata)
         var VecCat = oldcol + "_CatVec"
-        var encoder = new OneHotEncoder().setInputCol(indexCat).setOutputCol(VecCat).setDropLast(false)
-        transdata = encoder.transform(indexeddata)     //  结果是 稀疏矩阵的表示 (192,[179],[1.0])  表示192维向量，第179位填充的是1.0， 其他都是0
+        var encoder = new OneHotEncoder().setInputCol(newcol).setOutputCol(VecCat).setDropLast(false)
+        transdata = encoder.transform(transdata)     //  结果是 稀疏矩阵的表示 (192,[179],[1.0])  表示192维向量，第179位填充的是1.0， 其他都是0
+        transdata.show(2) 
       }
       
     transdata.show(10)  
@@ -116,29 +118,11 @@ object  Kmeans_ml{
         var current_cost =  model.computeCost(vec_data)
         println("cluster kn is: " + kn + " current_cost is : " +  current_cost)
 
-//    // Shows the result.
-//    println("Cluster Centers: ")
-//    model.clusterCenters.foreach(println)
-//    
-//    val KmeansResult = model.transform(vec_data)
-//     println("KmeansResult: ")
-//    KmeansResult.show(10)
      }
-     
-    
-    
       
   }
+    
   
-  
-  
-   
-   def MapHash(str:String) :Long ={
-     if(str.isEmpty())
-        -1
-     else
-       BKDRHash(str)
-   }
   
    def BKDRHash(str:String) :Long ={
      val seed:Long  = 131 // 31 131 1313 13131 131313 etc..
