@@ -46,7 +46,7 @@ object WOE {
    val startTime = System.currentTimeMillis(); 
    
    var transdata = hc.sql(s"select cast(tfr_dt_tm as double), cast(trans_at as  double), cast(total_disc_at as double) "+
-	    s"from tbl_common_his_trans where pdate=20160701 and substring(acpt_ins_id_cd,5,4)=3940 limit 100") 
+	    s"from tbl_common_his_trans where pdate=20160701 and substring(acpt_ins_id_cd,5,4)=3940 ").cache
 	    
 	 
 	 val transtime_splits = Array(0.0, 701010000.0, 701020000.0, 701030000.0, 701040000.0, 701050000.0, 701060000.0,
@@ -94,6 +94,9 @@ object WOE {
 	 
       val QD_Data_1 = discretizerFun("tfr_dt_tm", 12).fit(transdata).transform(transdata)	 
       val QD_Data_2 = discretizerFun("trans_at", 15).fit(QD_Data_1).transform(QD_Data_1)	
+      
+      QD_Data_2.show(5)
+      println("QD_Data_2 done in " + (System.currentTimeMillis()-startTime)/(1000*60) + " minutes." )  
 	 
    }
   
