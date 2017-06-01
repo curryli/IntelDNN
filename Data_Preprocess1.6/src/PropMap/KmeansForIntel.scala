@@ -55,7 +55,7 @@ object  KmeansForIntel{
       s"substring(settle_fwd_ins_id_cd,1,4) as settle_fwd_ins_id_cd_BK, substring(settle_fwd_ins_id_cd,5,4) as settle_fwd_ins_id_cd_RG, " + 
       s"substring(settle_rcv_ins_id_cd,1,4) as settle_rcv_ins_id_cd_BK, substring(settle_rcv_ins_id_cd,5,4) as settle_rcv_ins_id_cd_RG, " + 
       s"substring(acct_ins_id_cd,1,4) as acct_ins_id_cd_BK, substring(acct_ins_id_cd,5,4) as acct_ins_id_cd_RG " +
-	    s"from tbl_common_his_trans where pdate=20160701 and substring(acpt_ins_id_cd,5,4)=3940 ").cache
+	    s"from tbl_common_his_trans where pdate=20160701 ").cache
   
 	    println("SQL done in " + (System.currentTimeMillis()-startTime)/(1000*60) + " minutes." )  
       println("transdata.count is: " + transdata.count())

@@ -56,7 +56,7 @@ object LabelSamples {
       s"substring(settle_fwd_ins_id_cd,1,4) as settle_fwd_ins_id_cd_BK, substring(settle_fwd_ins_id_cd,5,4) as settle_fwd_ins_id_cd_RG, " + 
       s"substring(settle_rcv_ins_id_cd,1,4) as settle_rcv_ins_id_cd_BK, substring(settle_rcv_ins_id_cd,5,4) as settle_rcv_ins_id_cd_RG, " + 
       s"substring(acct_ins_id_cd,1,4) as acct_ins_id_cd_BK, substring(acct_ins_id_cd,5,4) as acct_ins_id_cd_RG " +
-	    s"from tbl_common_his_trans where pdate=20160701 ").cache           //.persist(StorageLevel.MEMORY_AND_DISK_SER)//
+	    s"from tbl_common_his_trans where pdate>=20160701 and pdate<=20160703").cache           //.persist(StorageLevel.MEMORY_AND_DISK_SER)//
     println("AllData count is " + AllData.count())
     
     var FraudData = hc.sql(s"select t1.settle_tp,t1.settle_cycle,t1.block_id,t1.trans_fwd_st,t1.trans_rcv_st,t1.sms_dms_conv_in,t1.cross_dist_in,t1.tfr_in_in,t1.trans_md,t1.source_region_cd,t1.dest_region_cd,t1.cups_card_in,t1.cups_sig_card_in,t1.card_class,t1.card_attr,t1.acq_ins_tp,t1.fwd_ins_tp,t1.rcv_ins_tp,t1.iss_ins_tp,t1.acpt_ins_tp,t1.resp_cd1,t1.resp_cd2,t1.resp_cd3,t1.resp_cd4,t1.cu_trans_st,t1.sti_takeout_in,t1.trans_id,t1.trans_tp,t1.trans_chnl,t1.card_media,t1.card_brand,t1.trans_id_conv,t1.trans_curr_cd,t1.conn_md,t1.msg_tp,t1.msg_tp_conv,t1.card_bin,t1.related_card_bin,t1.trans_proc_cd,t1.trans_proc_cd_conv,t1.mchnt_tp,t1.pos_entry_md_cd,t1.card_seq,t1.pos_cond_cd,t1.pos_cond_cd_conv,t1.term_tp,t1.rsn_cd,t1.addn_pos_inf,t1.orig_msg_tp,t1.orig_msg_tp_conv,t1.related_trans_id,t1.related_trans_chnl,t1.orig_trans_id,t1.orig_trans_chnl,t1.orig_card_media,t1.spec_settle_in,t1.iss_ds_settle_in,t1.acq_ds_settle_in,t1.upd_in,t1.exp_rsn_cd,t1.pri_cycle_no,t1.corr_pri_cycle_no,t1.disc_in,t1.orig_disc_curr_cd,t1.fwd_settle_conv_rt,t1.rcv_settle_conv_rt,t1.fwd_settle_curr_cd,t1.rcv_settle_curr_cd,t1.sp_mchnt_cd,t1.trans_media, " +    //mchnt_cd,t1.
@@ -72,7 +72,7 @@ object LabelSamples {
       s"from tbl_common_his_trans t1 "+
       s"left semi join tbl_arsvc_fraud_trans t2 "+
       s"on (t1.sys_tra_no=t2.sys_tra_no and t1.pri_acct_no_conv=t2.ar_pri_acct_no and t1.mchnt_cd=t2.mchnt_cd and t1.pdate=t2.trans_dt) "+
-      s"where t1.pdate>=20160701 and t1.pdate<=20160701")
+      s"where t1.pdate>=20160701 and t1.pdate<=20160703")
     println("FraudData count is " + FraudData.count())
     
     var NormalData = AllData.except(FraudData)
@@ -83,7 +83,7 @@ object LabelSamples {
     
     FraudData = FraudData.withColumn("isFraud", udf_Map1(FraudData("trans_md")))
     FraudData.show(5)
-    NormalData = NormalData.withColumn("isFraud", udf_Map0(FraudData("trans_md")))
+    NormalData = NormalData.withColumn("isFraud", udf_Map0(NormalData("trans_md")))
     NormalData.show(5)
     
     var LabeledData = NormalData.unionAll(FraudData)
