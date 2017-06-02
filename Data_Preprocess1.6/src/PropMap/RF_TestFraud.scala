@@ -27,17 +27,18 @@ import org.apache.spark.ml.clustering.KMeans
 import org.apache.spark.ml.Pipeline
 import org.apache.spark.ml.classification._
 import org.apache.spark.ml.evaluation.MulticlassClassificationEvaluator
+import org.apache.spark.ml.evaluation.BinaryClassificationEvaluator
 import org.apache.spark.ml.feature.{IndexToString, StringIndexer, VectorAssembler}
 import scala.collection.mutable.ArrayBuffer
 import scala.reflect.runtime.universe
-import org.apache.spark.ml.Pipeline
 import org.apache.spark.ml.PipelineStage
 import org.apache.spark.sql.types.DoubleType
 import org.apache.spark.sql._
 import org.apache.spark.sql.types._
 import org.apache.spark.sql.functions._
+import org.apache.spark.ml.classification.MultiClassSummarizer
 
-object RfPipeLine_Read {
+object RF_TestFraud {
   
 
   def main(args: Array[String]): Unit = {
@@ -83,32 +84,81 @@ object RfPipeLine_Read {
      .setInputCol("isFraud")
      .setOutputCol("label_idx")
      .fit(vec_data)  
-      
-      
-      
+       
       val rfClassifier = new RandomForestClassifier()
         .setLabelCol("label_idx")
         .setFeaturesCol("featureVector")
         .setNumTrees(5)
       
-         
+        
       val Array(trainingData, testData) = vec_data.randomSplit(Array(0.8, 0.2))
   
       val pipeline = new Pipeline().setStages(Array(assembler1,laber_indexer, rfClassifier))
       
       val model = pipeline.fit(trainingData)
-      
-      val predictionResultDF = model.transform(testData)
-      
-      val evaluator = new MulticlassClassificationEvaluator()
+  
+      val evaluator_precision = new MulticlassClassificationEvaluator()
         .setLabelCol("label_idx")
         .setPredictionCol("prediction")
-        .setMetricName("precision")     // spark2 dataframe  支持4种  supports "f1" (default), "weightedPrecision", "weightedRecall", "accuracy")    好像RDD多一点，http://blog.csdn.net/qq_34531825/article/details/52387513?locationNum=4
+        .setMetricName("precision")     
+        
+      val evaluator_recall = new MulticlassClassificationEvaluator()
+        .setLabelCol("label_idx")
+        .setPredictionCol("prediction")
+        .setMetricName("recall")
+        
+        //spark1  supports "f1" (default), "precision", "recall", "weightedPrecision", "weightedRecall"
+        // spark2 dataframe  支持4种  supports "f1" (default), "weightedPrecision", "weightedRecall", "accuracy")    好像RDD多一点，http://blog.csdn.net/qq_34531825/article/details/52387513?locationNum=4
    
-      val predictionAccuracy = evaluator.evaluate(predictionResultDF)
+              
+ //////////////////测试0。2的验证集的准确率//////////////////////////////////    
+      val predictedData = model.transform(testData)
+      val predictionAccuracy = evaluator_precision.evaluate(predictedData)
       println("Precision:" +  predictionAccuracy)
       
-      vec_data.unpersist(false)
+      val binaryClassificationEvaluator = new BinaryClassificationEvaluator()
+      def printlnMetric(metricName: String): Unit = {
+          println(metricName + " = " + binaryClassificationEvaluator.setLabelCol("label_idx").setMetricName(metricName).evaluate(predictedData))
+      }
+
+      printlnMetric("areaUnderROC")
+      //printlnMetric("areaUnderPR")    //spark2.0
+
+ //////////////////测试欺诈样本的准确率//////////////////////////////////    
+      val frauddata_valid = vec_data.filter(vec_data("isFraud").===(0))
+      val frauddata_valid_predict = model.transform(frauddata_valid)
+      val prediction2 = evaluator_precision.evaluate(frauddata_valid_predict)
+      println("frauddata_valid Precision:" +  prediction2)
+       
+      val prediction3 = evaluator_recall.evaluate(frauddata_valid_predict)
+      println("frauddata_valid recall:" +  prediction3)
+      
+       
+//////////////////////////////不调用，自己算混淆矩阵//////////////////////////////
+      //分类正确且分类为1的样本数量 TP  
+     val TP_Cnt = predictedData.filter(predictedData("label_idx") === predictedData("prediction")).filter(predictedData("label_idx")===1).count.toDouble
+
+      //分类正确且分类为0的样本数量 TN  
+     val TN_Cnt = predictedData.filter(predictedData("label_idx") === predictedData("prediction")).filter(predictedData("label_idx")===0).count.toDouble
+
+      //分类错误且分类为1的样本数量 FP 
+     val FP_Cnt = predictedData.filter(predictedData("label_idx") !== predictedData("prediction")).filter(predictedData("prediction")===1).count.toDouble
+
+      //分类错误且分类为0的样本数量 FN 
+     val FN_Cnt = predictedData.filter(predictedData("label_idx") !== predictedData("prediction")).filter(predictedData("prediction")===0).count.toDouble
+     
+     val Precision_N = TN_Cnt/(TN_Cnt + FN_Cnt)
+     val Recall_N = TN_Cnt/(TN_Cnt + FP_Cnt)
+      
+     println("TP_Cnt is: " + TP_Cnt)
+     println("TN_Cnt is: " + TN_Cnt)
+     println("FP_Cnt is: " + FP_Cnt)
+     println("FN_Cnt is: " + FN_Cnt)
+     println("Precision_N is: " + Precision_N)
+     println("Recall_N is: " + Recall_N)
+     
+     
+     vec_data.unpersist(false)
  
   }
   

@@ -9,14 +9,12 @@ import org.apache.spark.graphx.Graph.graphToGraphOps
 import org.apache.spark.graphx.PartitionStrategy
 import org.apache.spark.sql.SQLContext
 import org.apache.spark.sql.hive.HiveContext
-import Algorithm._
 import scala.collection.mutable.MutableList
 import scala.Range
 import org.apache.spark.graphx._
 import org.apache.spark.rdd.RDD
 import scala.collection.mutable.{Buffer,Set,Map}
 import org.apache.spark.rdd.RDD.rddToPairRDDFunctions
-import Algorithm._
 import org.apache.spark.sql.functions._
 import org.apache.spark.storage.StorageLevel
 import org.apache.spark.ml.feature.StandardScaler
@@ -90,7 +88,7 @@ object FraudRfPipeLine {
 	    s"from tbl_common_his_trans where pdate>=20160703 and pdate<=20160703 ").repartition(1000).persist(StorageLevel.MEMORY_AND_DISK_SER)// .cache         //.persist(StorageLevel.MEMORY_AND_DISK_SER)//
     println("AllData count is " + AllData.count())
   
-    var SampledData = AllData.sample(false, 0.00002, 0) 
+    var SampledData = AllData.sample(false, 0.0001, 0) 
     
     var NormalData = SampledData.except(FraudData).persist(StorageLevel.MEMORY_AND_DISK_SER)
     

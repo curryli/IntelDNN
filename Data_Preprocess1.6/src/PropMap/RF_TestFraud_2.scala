@@ -27,17 +27,18 @@ import org.apache.spark.ml.clustering.KMeans
 import org.apache.spark.ml.Pipeline
 import org.apache.spark.ml.classification._
 import org.apache.spark.ml.evaluation.MulticlassClassificationEvaluator
+import org.apache.spark.ml.evaluation.BinaryClassificationEvaluator
 import org.apache.spark.ml.feature.{IndexToString, StringIndexer, VectorAssembler}
 import scala.collection.mutable.ArrayBuffer
 import scala.reflect.runtime.universe
-import org.apache.spark.ml.Pipeline
 import org.apache.spark.ml.PipelineStage
 import org.apache.spark.sql.types.DoubleType
 import org.apache.spark.sql._
 import org.apache.spark.sql.types._
 import org.apache.spark.sql.functions._
+import org.apache.spark.ml.classification.MultiClassSummarizer
 
-object RfPipeLine_Read {
+object RF_TestFraud_2 {
   
 
   def main(args: Array[String]): Unit = {
@@ -79,36 +80,63 @@ object RfPipeLine_Read {
     //RandomForestClassifier was given input with invalid label column isFraud, without the number of classes specified. See StringIndexer.
     //https://stackoverflow.com/questions/36517302/randomforestclassifier-was-given-input-with-invalid-label-column-error-in-apache 
       
+      
+    //注意  "isFraud"  和 "label_idx"  不一定一样哦， 比如正常样本如果比欺诈样本多，那么index之后正常样本是0，欺诈样本是1，与原来的isFraud  无关
     val laber_indexer = new StringIndexer()
      .setInputCol("isFraud")
      .setOutputCol("label_idx")
      .fit(vec_data)  
-      
-      
-      
-      val rfClassifier = new RandomForestClassifier()
+       
+    val rfClassifier = new RandomForestClassifier()
         .setLabelCol("label_idx")
         .setFeaturesCol("featureVector")
         .setNumTrees(5)
+        
+    val trainingData = vec_data  
+    println("trainingData normal count is: " + trainingData.filter(trainingData("isFraud")===0).count())
+    println("trainingData fraud count is: " + trainingData.filter(trainingData("isFraud")===1).count())
+    
+    val pipeline_train = new Pipeline().setStages(Array(assembler1,laber_indexer, rfClassifier))
+    val model = pipeline_train.fit(trainingData)
       
-         
-      val Array(trainingData, testData) = vec_data.randomSplit(Array(0.8, 0.2))
-  
-      val pipeline = new Pipeline().setStages(Array(assembler1,laber_indexer, rfClassifier))
+ //////////////////生成test_data  待测//////////////////////////////////////////////////////////////     
+     val parsedRDD_2 = sc.textFile("xrli/IntelDNN/Labeled_20160704.csv").map(_.split(",")).map(eachRow => {
+          val a = eachRow.map(x => x.toDouble)
+       Row(a(0),a(1),a(2),a(3),a(4),a(5),a(6),a(7),a(8),a(9),a(10),a(11),a(12),a(13),a(14),a(15),a(16),a(17),a(18),a(19),a(20),a(21),a(22),a(23),a(24),a(25),a(26),a(27),a(28),a(29),a(30),a(31),a(32),a(33),a(34),a(35),a(36),a(37),a(38),a(39),a(40),a(41),a(42),a(43),a(44),a(45),a(46),a(47),a(48),a(49),a(50),a(51),a(52),a(53),a(54),a(55),a(56),a(57),a(58),a(59),a(60),a(61),a(62),a(63),a(64),a(65),a(66),a(67),a(68),a(69),a(70),a(71),a(72),a(73),a(74),a(75),a(76),a(77),a(78),a(79),a(80),a(81),a(82),a(83),a(84),a(85),a(86),a(87),a(88))
+     })
       
-      val model = pipeline.fit(trainingData)
-      
-      val predictionResultDF = model.transform(testData)
-      
-      val evaluator = new MulticlassClassificationEvaluator()
-        .setLabelCol("label_idx")
-        .setPredictionCol("prediction")
-        .setMetricName("precision")     // spark2 dataframe  支持4种  supports "f1" (default), "weightedPrecision", "weightedRecall", "accuracy")    好像RDD多一点，http://blog.csdn.net/qq_34531825/article/details/52387513?locationNum=4
+    var testData = sqlCtx.createDataFrame(parsedRDD_2, schemacc).persist(StorageLevel.MEMORY_AND_DISK_SER)
+//    println("testData normal count is: " + testData.filter(testData("isFraud")===0).count())
+//    println("testData fraud count is: " + testData.filter(testData("isFraud")===1).count())
+    
+    val predictedData = model.transform(testData)
+//    println("predictedData count is: " + predictedData.count())
    
-      val predictionAccuracy = evaluator.evaluate(predictionResultDF)
-      println("Precision:" +  predictionAccuracy)
+//////////////////////////////不调用，自己算混淆矩阵，过滤条件不一定每次一样，要看具体情况//////////////////////////////
+      //分类正确且 为1（欺诈）的样本数量 TP  
+     val TP_Cnt = predictedData.filter(predictedData("label_idx") === predictedData("prediction")).filter(predictedData("label_idx")===1).count.toDouble
+
+      //分类正确且 为0（正常）的样本数量 TN  
+     val TN_Cnt = predictedData.filter(predictedData("label_idx") === predictedData("prediction")).filter(predictedData("label_idx")===0).count.toDouble
+
+      //分类错误且为预测为1的样本数量 FP 
+     val FP_Cnt = predictedData.filter(predictedData("label_idx") !== predictedData("prediction")).filter(predictedData("prediction")===1).count.toDouble
+
+      //分类错误且预测为0的样本数量 FN 
+     val FN_Cnt = predictedData.filter(predictedData("label_idx") !== predictedData("prediction")).filter(predictedData("prediction")===0).count.toDouble
+     
+     val Precision_P = TP_Cnt/(TP_Cnt + FP_Cnt)
+     val Recall_P = TP_Cnt/(TP_Cnt + FN_Cnt)
       
-      vec_data.unpersist(false)
+     println("TP_Cnt is: " + TP_Cnt)
+     println("TN_Cnt is: " + TN_Cnt)
+     println("FP_Cnt is: " + FP_Cnt)
+     println("FN_Cnt is: " + FN_Cnt)
+     println("Precision_P is: " + Precision_P)
+     println("Recall_P is: " + Recall_P)
+     
+     
+     vec_data.unpersist(false)
  
   }
   
