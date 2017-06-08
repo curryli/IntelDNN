@@ -62,7 +62,7 @@ object  Save_Load_Serializable{
       s"substring(settle_fwd_ins_id_cd,1,4) as settle_fwd_ins_id_cd_BK, substring(settle_fwd_ins_id_cd,5,4) as settle_fwd_ins_id_cd_RG, " + 
       s"substring(settle_rcv_ins_id_cd,1,4) as settle_rcv_ins_id_cd_BK, substring(settle_rcv_ins_id_cd,5,4) as settle_rcv_ins_id_cd_RG, " + 
       s"substring(acct_ins_id_cd,1,4) as acct_ins_id_cd_BK, substring(acct_ins_id_cd,5,4) as acct_ins_id_cd_RG " +
-	    s"from tbl_common_his_trans where pdate>=20160701 and pdate<=20160710 ").repartition(10).persist(StorageLevel.MEMORY_AND_DISK_SER)// .cache         //.persist(StorageLevel.MEMORY_AND_DISK_SER)//
+	    s"from tbl_common_his_trans where pdate>=20160701 and pdate<=20160710 ").repartition(10000).persist(StorageLevel.MEMORY_AND_DISK_SER)// .cache         //.persist(StorageLevel.MEMORY_AND_DISK_SER)//
     println("AllData count is " + AllData.count())
     
         
@@ -108,7 +108,7 @@ object  Save_Load_Serializable{
       s"substring(settle_fwd_ins_id_cd,1,4) as settle_fwd_ins_id_cd_BK, substring(settle_fwd_ins_id_cd,5,4) as settle_fwd_ins_id_cd_RG, " + 
       s"substring(settle_rcv_ins_id_cd,1,4) as settle_rcv_ins_id_cd_BK, substring(settle_rcv_ins_id_cd,5,4) as settle_rcv_ins_id_cd_RG, " + 
       s"substring(acct_ins_id_cd,1,4) as acct_ins_id_cd_BK, substring(acct_ins_id_cd,5,4) as acct_ins_id_cd_RG " +
-	    s"from tbl_common_his_trans where pdate>=20160711 and pdate<=20160711 limit 1000 ").repartition(10).persist(StorageLevel.MEMORY_AND_DISK_SER)
+	    s"from tbl_common_his_trans where pdate>=20160711 and pdate<=20160711 limit 1000 ").repartition(10000).persist(StorageLevel.MEMORY_AND_DISK_SER)
      
     var vec_data = my_index_Model.transform(testData)
     println("Indexed done in " + (System.currentTimeMillis()-startTime)/(1000*60) + " minutes." )    

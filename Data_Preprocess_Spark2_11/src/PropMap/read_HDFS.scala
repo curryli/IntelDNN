@@ -62,14 +62,14 @@ object read_HDFS {
     
        val udf_pdate = udf[String, String]{xstr => constUtil.dateMap(i)}
        tmp_DF = tmp_DF.withColumn("pdate", udf_pdate(tmp_DF("pri_key")))
-       tmp_DF.show(5)
+       //tmp_DF.show(5)
        if(i==1)
          All_DF = tmp_DF
        else
          All_DF = All_DF.unionAll(tmp_DF)
     }
     
-    All_DF.show(10)
+    All_DF.show(5)
     
      
     println("Done")
