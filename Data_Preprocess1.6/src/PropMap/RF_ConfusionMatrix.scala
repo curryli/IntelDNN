@@ -37,8 +37,11 @@ import org.apache.spark.sql._
 import org.apache.spark.sql.types._
 import org.apache.spark.sql.functions._
 import org.apache.spark.ml.classification.MultiClassSummarizer
+import org.apache.spark.ml.classification.RandomForestClassifier
+import org.apache.spark.mllib.tree.RandomForest
+import org.apache.spark.mllib.tree.model.RandomForestModel
 
-object RF_TestFraud_2 {
+object RF_ConfusionMatrix {
   
 
   def main(args: Array[String]): Unit = {
@@ -100,7 +103,7 @@ object RF_TestFraud_2 {
     val model = pipeline_train.fit(trainingData)
       
  //////////////////生成test_data  待测//////////////////////////////////////////////////////////////     
-     val parsedRDD_2 = sc.textFile("xrli/IntelDNN/Labeled_20160704.csv").map(_.split(",")).map(eachRow => {
+     val parsedRDD_2 = sc.textFile("xrli/IntelDNN/Labeled_20160705.csv").map(_.split(",")).map(eachRow => {
           val a = eachRow.map(x => x.toDouble)
        Row(a(0),a(1),a(2),a(3),a(4),a(5),a(6),a(7),a(8),a(9),a(10),a(11),a(12),a(13),a(14),a(15),a(16),a(17),a(18),a(19),a(20),a(21),a(22),a(23),a(24),a(25),a(26),a(27),a(28),a(29),a(30),a(31),a(32),a(33),a(34),a(35),a(36),a(37),a(38),a(39),a(40),a(41),a(42),a(43),a(44),a(45),a(46),a(47),a(48),a(49),a(50),a(51),a(52),a(53),a(54),a(55),a(56),a(57),a(58),a(59),a(60),a(61),a(62),a(63),a(64),a(65),a(66),a(67),a(68),a(69),a(70),a(71),a(72),a(73),a(74),a(75),a(76),a(77),a(78),a(79),a(80),a(81),a(82),a(83),a(84),a(85),a(86),a(87),a(88))
      })
@@ -134,10 +137,13 @@ object RF_TestFraud_2 {
      println("FN_Cnt is: " + FN_Cnt)
      println("Precision_P is: " + Precision_P)
      println("Recall_P is: " + Recall_P)
-     
-     
+      
      vec_data.unpersist(false)
- 
+    
+//     model.save("myModelPath")
+//     val sameModel = new RandomForestClassificationModel.load("myModelPath")
+//     val rfModel = RandomForestModel.load(sc, "myModelPath")
+    
   }
   
   

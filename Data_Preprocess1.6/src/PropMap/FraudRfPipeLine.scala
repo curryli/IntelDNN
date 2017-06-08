@@ -68,7 +68,7 @@ object FraudRfPipeLine {
       s"from tbl_common_his_trans t1 "+
       s"left semi join tbl_arsvc_fraud_trans t2 "+
       s"on (t1.sys_tra_no=t2.sys_tra_no and t1.pri_acct_no_conv=t2.ar_pri_acct_no and t1.mchnt_cd=t2.mchnt_cd and t1.pdate=t2.trans_dt) "+
-      s"where t1.pdate>=20160703 and t1.pdate<=20160703 ").repartition(1000).persist(StorageLevel.MEMORY_AND_DISK_SER)  //.cache 
+      s"where t1.pdate>=20160705 and t1.pdate<=20160705 ").repartition(1000).persist(StorageLevel.MEMORY_AND_DISK_SER)  //.cache 
         
     println("FraudData done in " + (System.currentTimeMillis()-startTime)/(1000*60) + " minutes." )    
     println("FraudData count is " + FraudData.count())
