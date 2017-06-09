@@ -109,4 +109,36 @@ object get_from_HDFS {
      
        AllData
     }
+
+
+    def get_origin_Fraud_DF(ss: SparkSession, startdate:String, enddate:String):DataFrame = {
+    		val sc = ss.sparkContext
+    		
+    		var All_DF: DataFrame = null
+    		//until和Range是左闭右开，1是包含的，10是不包含。而to是左右都包含。  for(i <- 0 until 10);  var r = Range(1,10,2);  默认步长1
+    		
+    		var start = constUtil.date_to_num_Map(startdate)
+    		var end = constUtil.date_to_num_Map(enddate)
+    		
+    		for(i <- start to end) {
+    		   val filename = "/user/hddtmn/fraud_trans" + constUtil.dateMap(i) + "_correct"
+    		   println(filename)
+    		   val tmpRdd = sc.textFile(filename).map{str=>
+    			   var tmparr = str.split("\",\"")         
+    			   tmparr = tmparr.map { x => x.toString()}    
+    			   Row.fromSeq(tmparr.toSeq)
+    		   }
+    	   
+    		   var tmp_DF = ss.createDataFrame(tmpRdd, constUtil.schema_251)
+    		
+    		   val udf_pdate = udf[String, String]{xstr => constUtil.dateMap(i)}
+    		   tmp_DF = tmp_DF.withColumn("pdate", udf_pdate(tmp_DF("pri_key")))
+    		   //tmp_DF.show(5)
+    		   if(i==start)
+    			 All_DF = tmp_DF
+    		   else
+    			 All_DF = All_DF.unionAll(tmp_DF)
+    		} 
+    		   All_DF
+     }
 }

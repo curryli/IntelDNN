@@ -65,8 +65,8 @@ object KmeansCounts {
  
     val startTime = System.currentTimeMillis(); 
      
-    val startdate = "20160702"
-    val enddate = "20160702"
+    val startdate = "20160704"
+    val enddate = "20160710"
     var AllData = IntelUtil.get_from_HDFS.get_origin_DF(ss, startdate, enddate)//.sample(false, 0.0001, 0) 
     
     println("AllData done in " + (System.currentTimeMillis()-startTime)/(1000*60) + " minutes." )    
@@ -92,33 +92,27 @@ object KmeansCounts {
     
     val kmodel = kmeans.fit(countdf)
     
-//    for (center <-kmodel.clusterCenters) {
-//      println(" "+ center)
-//    }
-//    for(i<- 0 to 4){
-//      var dfresult = KmeansResult.filter(KmeansResult("prediction")===i)
-//      println("count==" + i + " num is: "+ dfresult.count())
-//    }
-    
-    
+    val KmeansResult = kmodel.transform(countdf)
+    println("Kmeans transform done in " + (System.currentTimeMillis()-startTime)/(1000*60) + " minutes." )    
+    KmeansResult.show() 
+  
     var centerIndexlist = List[centerIndex]()
     val centerlist = kmodel.clusterCenters
     for(i <- 0 to kn-1){
        centerIndexlist = centerIndexlist.::(centerIndex(i, centerlist(i)))
     }
     val centerIndexDF = ss.createDataFrame(centerIndexlist)//.withColumnRenamed("id", "center")
+    
+    println("centerIndexDF done in " + (System.currentTimeMillis()-startTime)/(1000*60) + " minutes." )   
     centerIndexDF.show
-    
-    val KmeansResult = kmodel.transform(countdf)
-    println("Kmeans done in " + (System.currentTimeMillis()-startTime)/(1000*60) + " minutes." )    
-    KmeansResult.show() 
      
-
-    
-    val distributeDF = KmeansResult.groupBy("prediction").agg(count("counts_CatVec"))
+    val distributeDF = KmeansResult.groupBy("prediction").agg(count("counts_CatVec") as "LabelCounts")
+    println("distributeDF done in " + (System.currentTimeMillis()-startTime)/(1000*60) + " minutes." ) 
     distributeDF.show
     
-    var joinedDF = distributeDF.join(centerIndexDF, distributeDF("prediction") === centerIndexDF("id"), "left_outer") 
+    var joinedDF = distributeDF.join(centerIndexDF, distributeDF("prediction") === centerIndexDF("id"), "right_outer")
+    joinedDF = joinedDF.select("center", "LabelCounts").sort("center")
+    println("joinedDF done in " + (System.currentTimeMillis()-startTime)/(1000*60) + " minutes." ) 
     joinedDF.show
   }
   
