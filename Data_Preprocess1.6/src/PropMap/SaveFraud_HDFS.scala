@@ -54,13 +54,13 @@ object SaveFraud_HDFS {
     val startTime = System.currentTimeMillis(); 
     
     //注意select * 会出现内存溢出报错，估计是1行太多了，java堆栈不够，起始可以设置  http://blog.csdn.net/oaimm/article/details/25298691  但这里就少选几列就可以了
-    var FraudData = hc.sql(s"select sys_tra_no,ar_pri_acct_no,mchnt_cd,trans_dt "+
+    var Fraud_join = hc.sql(s"select sys_tra_no,ar_pri_acct_no,mchnt_cd,trans_dt,fraud_tp "+
       s"from tbl_arsvc_fraud_trans "+ 
       s"where trans_dt>=20160101 and trans_dt<=20161231 ")//.repartition(1000).persist(StorageLevel.MEMORY_AND_DISK_SER)  //.cache 
         
     
-      println("FraudData.count(): " + FraudData.count())
-      FraudData.rdd.map { x => x.toSeq.mkString("\t") }.saveAsTextFile("xrli/IntelDNN/Fraud_in_common_trans_2016")
+      println("Fraud_join.count(): " + Fraud_join.count())
+      Fraud_join.rdd.map { x => x.toSeq.mkString("\t") }.saveAsTextFile("xrli/IntelDNN/Fraud_join_2016")
  
   }
   

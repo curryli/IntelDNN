@@ -111,34 +111,21 @@ object get_from_HDFS {
     }
 
 
-    def get_origin_Fraud_DF(ss: SparkSession, startdate:String, enddate:String):DataFrame = {
+    def get_fraud_join_DF(ss: SparkSession, startdate:String, enddate:String):DataFrame = {
     		val sc = ss.sparkContext
-    		
-    		var All_DF: DataFrame = null
-    		//until和Range是左闭右开，1是包含的，10是不包含。而to是左右都包含。  for(i <- 0 until 10);  var r = Range(1,10,2);  默认步长1
-    		
-    		var start = constUtil.date_to_num_Map(startdate)
-    		var end = constUtil.date_to_num_Map(enddate)
-    		
-    		for(i <- start to end) {
-    		   val filename = "/user/hddtmn/fraud_trans" + constUtil.dateMap(i) + "_correct"
-    		   println(filename)
-    		   val tmpRdd = sc.textFile(filename).map{str=>
-    			   var tmparr = str.split("\",\"")         
-    			   tmparr = tmparr.map { x => x.toString()}    
-    			   Row.fromSeq(tmparr.toSeq)
-    		   }
-    	   
-    		   var tmp_DF = ss.createDataFrame(tmpRdd, constUtil.schema_251)
-    		
-    		   val udf_pdate = udf[String, String]{xstr => constUtil.dateMap(i)}
-    		   tmp_DF = tmp_DF.withColumn("pdate", udf_pdate(tmp_DF("pri_key")))
-    		   //tmp_DF.show(5)
-    		   if(i==start)
-    			 All_DF = tmp_DF
-    		   else
-    			 All_DF = All_DF.unionAll(tmp_DF)
-    		} 
-    		   All_DF
+    	  val filename = "xrli/IntelDNN/Fraud_join_2016"
+    		 
+    	  //sys_tra_no,ar_pri_acct_no,mchnt_cd,trans_dt,fraud_tp
+    	  //sys_tra_no, pri_acct_no_conv, mchnt_cd, pdate 
+
+		    val fraud_join_Rdd = sc.textFile(filename).map(str=> str.split("\t")).filter(tmparr=> tmparr(3)>=startdate && tmparr(3)<=enddate).map{ tmparr=>
+			    Row.fromSeq(tmparr.toSeq)
+    		}
+		    
+		    val schema_fraud_join = StructType(StructField("sys_tra_no",StringType,true)::StructField("pri_acct_no_conv",StringType,true)::StructField("mchnt_cd",StringType,true)::StructField("pdate",StringType,true)::StructField("fraud_tp",StringType,true)::Nil)
+			  val fraud_join_DF = ss.createDataFrame(fraud_join_Rdd, schema_fraud_join) 
+			  fraud_join_DF
+  
      }
+    
 }

@@ -13,7 +13,7 @@ import org.apache.spark.graphx._
 import org.apache.spark.sql.functions._
 
 
-object read_HDFS { 
+object test_read_HDFS { 
   def main(args: Array[String]) { 
      //屏蔽日志
     Logger.getLogger("org").setLevel(Level.ERROR);
