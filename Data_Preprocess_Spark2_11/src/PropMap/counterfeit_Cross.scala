@@ -65,20 +65,17 @@ object counterfeit_Cross {
  
     val startTime = System.currentTimeMillis(); 
      
-    val startdate = "20160701"
-    val enddate = "20160701"
-    var DisperseArr_filled = IntelUtil.constUtil.DisperseArr.map{x => x + "_filled"}
-    //DisperseArr_filled.foreach {println}
-    
-    val AllData = IntelUtil.get_from_HDFS.get_filled_DF(ss, startdate, enddate).repartition(1000)//.persist(StorageLevel.MEMORY_AND_DISK_SER)// .cache         //.persist(StorageLevel.MEMORY_AND_DISK_SER)//
+    val startdate = "20160709"
+    val enddate = "20160709"
+    var usedArr_filled = IntelUtil.constUtil.usedArr.map{x => x + "_filled"}
+  
+    val AllData = IntelUtil.get_from_HDFS.get_filled_DF(ss, startdate, enddate).repartition(1000)//.cache//.persist(StorageLevel.MEMORY_AND_DISK_SER)// .cache         //.persist(StorageLevel.MEMORY_AND_DISK_SER)//
     AllData.show(5)
     println("AllData done in " + (System.currentTimeMillis()-startTime)/(1000*60) + " minutes." )
     
     var All_Cross = AllData.filter(AllData("cross_dist_in")==="1").repartition(1000).persist(StorageLevel.MEMORY_AND_DISK_SER) 
     println("All_Cross count is " + All_Cross.count())  //8千万的2百万左右
-    All_Cross = All_Cross.sample(false, 0.001, 0)
-    //AllData.unpersist(false)
-    
+  
     var fraud_join_Data = IntelUtil.get_from_HDFS.get_fraud_join_DF(ss, startdate, enddate).repartition(100).persist(StorageLevel.MEMORY_AND_DISK_SER) 
     println("fraud_join_Data count is " + fraud_join_Data.count())   
     fraud_join_Data.show(5)
@@ -89,14 +86,14 @@ object counterfeit_Cross {
                                                && All_Cross("mchnt_cd")===fraud_join_Data("mchnt_cd")
                                                && All_Cross("pdate")===fraud_join_Data("pdate"), "leftsemi").persist(StorageLevel.MEMORY_AND_DISK_SER) 
   
-    println("All_fraud__Cross count is " + All_fraud_Cross.count())
+    println("All_fraud_Cross count is " + All_fraud_Cross.count())
     All_fraud_Cross.show(5)
-    println("All_fraud__Cross done in " + (System.currentTimeMillis()-startTime)/(1000*60) + " minutes." )
+    println("All_fraud_Cross done in " + (System.currentTimeMillis()-startTime)/(1000*60) + " minutes." )
     
   
  
-    val All_Cross_filled = All_Cross.selectExpr(DisperseArr_filled:_*)
-    val All_fraud_Cross_filled = All_fraud_Cross.selectExpr(DisperseArr_filled:_*)
+    val All_Cross_filled = All_Cross.sample(false, 0.001, 0).selectExpr(usedArr_filled:_*)
+    val All_fraud_Cross_filled = All_fraud_Cross.selectExpr(usedArr_filled:_*)
     
     ////////////////////////////////NormalData
     var Normal_Cross_filled = All_Cross_filled.except(All_fraud_Cross_filled).persist(StorageLevel.MEMORY_AND_DISK_SER)
@@ -115,15 +112,27 @@ object counterfeit_Cross {
     counterfeit.unpersist(false)
     println("counterfeit_Cross done in " + (System.currentTimeMillis()-startTime)/(1000*60) + " minutes." )
        
+    
     ////////////////////////////////FraudData
-    val counterfeit_Cross_filled = counterfeit_Cross.selectExpr(DisperseArr_filled:_*)
+    val counterfeit_Cross_filled = counterfeit_Cross.selectExpr(usedArr_filled:_*)
     println("counterfeit_Cross_filled count is " + counterfeit_Cross_filled.count())
     println("Normal_Cross_filled count is " + Normal_Cross_filled.count())
-    All_Cross.unpersist(false)
-//    var magcard_counterfeit_Cross_filled = counterfeit_Cross_filled.filter(counterfeit_Cross_filled("card_media_filled")==="1")
+
+//    var magcard_counterfeit_Cross_filled = counterfeit_Cross_filled.filter(counterfeit_Cross_filled("card_media_filled")==="1")   //磁卡伪卡，发现比例并不高
 //    var magcard_Normal_Cross_filled = Normal_Cross_filled.filter(counterfeit_Cross_filled("card_media_filled")==="1") 
 //    println("magcard_counterfeit_Cross_filled count is " + magcard_counterfeit_Cross_filled.count())
 //    println("magcard_Normal_Cross_filled count is " + magcard_Normal_Cross_filled.count())
+    
+/////////////////////////////////////////////////////////////    
+    var counterfeit_related_cross_Data = All_Cross.join(counterfeit, All_Cross("pri_acct_no_conv")===counterfeit("pri_acct_no_conv"), "left_semi") 
+    var counterfeit_related_cross_filled = counterfeit_Cross.selectExpr(usedArr_filled:_*)
+    val counterfeit_related_cross_normal_filled = counterfeit_related_cross_filled.except(counterfeit_Cross_filled)
+    println("counterfeit_related_cross_normal_filled count is " + counterfeit_related_cross_normal_filled.count())
+    
+    
+    Normal_Cross_filled = Normal_Cross_filled.unionAll(counterfeit_related_cross_normal_filled)
+//////////////////////////////////////////////////////////////////////////////////////
+    All_Cross.unpersist(false)
     
     // Column isFraud (label) must be of type DoubleType
     val udf_Map0 = udf[Double, String]{xstr => 0.0}
@@ -134,8 +143,10 @@ object counterfeit_Cross {
     var LabeledData_filled = NormalData_filled.unionAll(FraudData_filled)
     println("LabeledData_filled done in " + (System.currentTimeMillis()-startTime)/(1000*60) + " minutes." )
     LabeledData_filled.show(5)
-    LabeledData_filled.rdd.map(_.mkString(",")).saveAsTextFile("xrli/IntelDNN/LabeledData_filled_cross")
+    LabeledData_filled.sort(LabeledData_filled("pri_acct_no_conv_filled")).repartition(1).rdd.map(_.mkString(",")).saveAsTextFile("xrli/IntelDNN/LabeledData_filled_cross_0110")
     
+    //AllData.unpersist(false)
+   
   }
   
     

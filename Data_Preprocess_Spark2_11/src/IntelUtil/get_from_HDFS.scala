@@ -93,7 +93,7 @@ object get_from_HDFS {
     
     def get_filled_DF(ss: SparkSession, startdate:String, enddate:String):DataFrame = {
        var AllData = get_spilit_DF(ss, startdate, enddate)
-       val DisperseArr =  constUtil.DisperseArr
+       val usedArr =  constUtil.usedArr
        
        val udf_replaceEmpty = udf[String, String]{xstr => 
         if(xstr.isEmpty())
@@ -102,7 +102,7 @@ object get_from_HDFS {
           xstr
        }
        
-       for(oldcol <- DisperseArr){
+       for(oldcol <- usedArr){
         val newcol = oldcol + "_filled" 
         AllData = AllData.withColumn(newcol, udf_replaceEmpty(AllData(oldcol)))
        }
