@@ -39,7 +39,7 @@ import org.apache.spark.ml.PipelineStage
 import org.apache.spark.ml.PipelineModel
 
 
-object counterfeit_Cross {
+object counterfeit_Cross_by_Account {
   
 
   def main(args: Array[String]): Unit = {
@@ -66,10 +66,10 @@ object counterfeit_Cross {
     val startTime = System.currentTimeMillis(); 
      
     val startdate = "20160701"
-    val enddate = "20160731"
+    val enddate = "20160701"
     var usedArr_filled = IntelUtil.constUtil.usedArr.map{x => x + "_filled"}
   
-    val AllData = IntelUtil.get_from_HDFS.get_filled_DF(ss, startdate, enddate).repartition(1000)//.cache//.persist(StorageLevel.MEMORY_AND_DISK_SER)// .cache         //.persist(StorageLevel.MEMORY_AND_DISK_SER)//
+    val AllData = IntelUtil.get_from_HDFS.get_filled_DF(ss, startdate, enddate).repartition(1000).cache//.persist(StorageLevel.MEMORY_AND_DISK_SER)// .cache         //.persist(StorageLevel.MEMORY_AND_DISK_SER)//
     AllData.show(5)
     println("AllData done in " + (System.currentTimeMillis()-startTime)/(1000*60) + " minutes." )
     
@@ -92,7 +92,7 @@ object counterfeit_Cross {
     
   
  
-    val All_Cross_filled = All_Cross.sample(false, 0.0001, 0).selectExpr(usedArr_filled:_*)
+    val All_Cross_filled = All_Cross.sample(false, 0.00001, 0).selectExpr(usedArr_filled:_*)
     val All_fraud_Cross_filled = All_fraud_Cross.selectExpr(usedArr_filled:_*)
     
     ////////////////////////////////NormalData
@@ -117,20 +117,14 @@ object counterfeit_Cross {
     val counterfeit_Cross_filled = counterfeit_Cross.selectExpr(usedArr_filled:_*)
     println("counterfeit_Cross_filled count is " + counterfeit_Cross_filled.count())
     println("Normal_Cross_filled count is " + Normal_Cross_filled.count())
-
-//    var magcard_counterfeit_Cross_filled = counterfeit_Cross_filled.filter(counterfeit_Cross_filled("card_media_filled")==="1")   //磁卡伪卡，发现比例并不高
-//    var magcard_Normal_Cross_filled = Normal_Cross_filled.filter(counterfeit_Cross_filled("card_media_filled")==="1") 
-//    println("magcard_counterfeit_Cross_filled count is " + magcard_counterfeit_Cross_filled.count())
-//    println("magcard_Normal_Cross_filled count is " + magcard_Normal_Cross_filled.count())
-    
+ 
 /////////////////////////////////////////////////////////////    
-    var counterfeit_related_cross_Data = All_Cross.join(counterfeit, All_Cross("pri_acct_no_conv")===counterfeit("pri_acct_no_conv"), "left_semi") 
-    var counterfeit_related_cross_filled = counterfeit_related_cross_Data.selectExpr(usedArr_filled:_*)
-    val counterfeit_related_cross_normal_filled = counterfeit_related_cross_filled.except(counterfeit_Cross_filled)
-    println("counterfeit_related_cross_normal_filled count is " + counterfeit_related_cross_normal_filled.count())
-    
-    
-    Normal_Cross_filled = Normal_Cross_filled.unionAll(counterfeit_related_cross_normal_filled)
+    var fraud_related_Data = AllData.join(counterfeit, AllData("pri_acct_no_conv")===counterfeit("pri_acct_no_conv"), "left_semi") 
+    var fraud_related_Data_filled = fraud_related_Data.selectExpr(usedArr_filled:_*)
+    val fraud_related_Data_normal_filled = fraud_related_Data_filled.except(counterfeit_Cross_filled)
+    println("fraud_related_Data_normal_filled count is " + fraud_related_Data_normal_filled.count())
+     
+    Normal_Cross_filled = Normal_Cross_filled.unionAll(fraud_related_Data_normal_filled)
 //////////////////////////////////////////////////////////////////////////////////////
     All_Cross.unpersist(false)
     
@@ -143,7 +137,7 @@ object counterfeit_Cross {
     var LabeledData_filled = NormalData_filled.unionAll(FraudData_filled)
     println("LabeledData_filled done in " + (System.currentTimeMillis()-startTime)/(1000*60) + " minutes." )
     LabeledData_filled.show(5)
-    LabeledData_filled.sort(LabeledData_filled("pri_acct_no_conv_filled")).repartition(1).rdd.map(_.mkString(",")).saveAsTextFile("xrli/IntelDNN/LabeledData_filled_cross_1607")
+    LabeledData_filled.sort(LabeledData_filled("pri_acct_no_conv_filled")).repartition(1).rdd.map(_.mkString(",")).saveAsTextFile("xrli/IntelDNN/LabeledData_test")
     
     //AllData.unpersist(false)
    
