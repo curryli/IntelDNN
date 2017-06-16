@@ -1,4 +1,4 @@
-package PropMap
+package Prepare
 import org.apache.log4j.Level
 import org.apache.log4j.Logger
 import org.apache.spark._
@@ -39,7 +39,7 @@ import org.apache.spark.ml.PipelineStage
 import org.apache.spark.ml.PipelineModel
 
 
-object save_counterfeit {
+object save_counterfeit_1 {
   
 
   def main(args: Array[String]): Unit = {
@@ -65,8 +65,10 @@ object save_counterfeit {
  
     val startTime = System.currentTimeMillis(); 
       
-    val startdate = "20160801"
-    val enddate = "20160831"
+    val startdate = IntelUtil.varUtil.startdate
+    val enddate = IntelUtil.varUtil.enddate
+    val rangedir = IntelUtil.varUtil.rangeDir  
+    
     var usedArr_filled = IntelUtil.constUtil.usedArr.map{x => x + "_filled"}
     
        
@@ -81,7 +83,7 @@ object save_counterfeit {
     var counterfeit_cards = counterfeit_infraud.select("pri_acct_no_conv").distinct().persist(StorageLevel.MEMORY_AND_DISK_SER) 
     println("counterfeit_cards count is " + counterfeit_cards.count())
     //counterfeit_cards.show(5)
-    counterfeit_cards.rdd.map(r=>r.getString(0)).saveAsTextFile("xrli/IntelDNN/counterfeit_cards_1608")
+    counterfeit_cards.rdd.map(r=>r.getString(0)).saveAsTextFile(rangedir + "counterfeit_cards")
  
 	  fraud_join_Data.unpersist(false)
 	  
@@ -99,46 +101,9 @@ object save_counterfeit {
     val counterfeit_filled = counterfeit_fraud.selectExpr(usedArr_filled:_*)
     println("counterfeit_filled count is " + counterfeit_filled.count())
     println("counterfeit_filled done in " + (System.currentTimeMillis()-startTime)/(1000*60) + " minutes." )
-    
-    var counterfeit_related_normal =  counterfeit_related.selectExpr(usedArr_filled:_*).except(counterfeit_filled)
-    println("counterfeit_related_normal count is " + counterfeit_related_normal.count())
-    println("counterfeit_related_normal done in " + (System.currentTimeMillis()-startTime)/(1000*60) + " minutes." )                             
      
-    //counterfeit_filled.show(5)
-    counterfeit_filled.rdd.map(_.mkString(",")).saveAsTextFile("xrli/IntelDNN/counterfeit_filled_1608")
-
-    
-    /////////////////////////////////////////////////////////太慢的话下面步骤可以//////////////////////////////////////////////////////////////
-    ////////////////////////////////////////////////Normal////////////////////////
-    
-//    var sample_cards = AllData.sample(false, 0.00005, 0).select("pri_acct_no_conv").distinct()
-//    var normal_cards = sample_cards.except(counterfeit_cards) //不准确 ，最好是 fraud_cards_list，不过概率很小，差不多
-//    println("normal_cards count is " + normal_cards.count())
-//    println("normal_cards done in " + (System.currentTimeMillis()-startTime)/(1000*60) + " minutes." )                             
-//    
-//    var normal_cards_list = normal_cards.rdd.map(r=>r.getString(0)).collect()
-//     
-//    val normal_cards_data = AllData.filter(AllData("pri_acct_no_conv").isin(normal_cards_list:_*))
-//    
-//    counterfeit_cards.unpersist(false)
-//    println("normal_cards_data count is " + normal_cards_data.count())
-//    println("normal_cards_data done in " + (System.currentTimeMillis()-startTime)/(1000*60) + " minutes." ) 
-//    //normal_cards.show(5)
-//    
-//    val normal_data_filled = normal_cards_data.selectExpr(usedArr_filled:_*).unionAll(counterfeit_related_normal)
-//    //normal_data.show(5)
-//    println("normal_data_filled done in " + (System.currentTimeMillis()-startTime)/(1000*60) + " minutes." ) 
-//    
-//    val udf_Map0 = udf[Double, String]{xstr => 0.0}
-//    val udf_Map1 = udf[Double, String]{xstr => 1.0}
-//    
-//    var NormalData_labeled = normal_data_filled.withColumn("isFraud", udf_Map0(normal_data_filled("trans_md_filled")))
-//    var counterfeit_labeled = counterfeit_filled.withColumn("isFraud", udf_Map1(counterfeit_filled("trans_md_filled")))
-//    var LabeledData = counterfeit_labeled.unionAll(NormalData_labeled)
-//    //LabeledData.show(5)
-//    LabeledData.rdd.map(_.mkString(",")).coalesce(1).saveAsTextFile("xrli/IntelDNN/Labeled_All_counterfeit_1608")
-//////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-    
+    counterfeit_filled.rdd.map(_.mkString(",")).saveAsTextFile(rangedir + "counterfeit_filled")
+  
     println("All done in " + (System.currentTimeMillis()-startTime)/(1000*60) + " minutes." ) 
     
     

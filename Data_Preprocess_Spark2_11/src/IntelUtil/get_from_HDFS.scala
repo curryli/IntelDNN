@@ -39,7 +39,7 @@ object get_from_HDFS {
        var tmp_DF = ss.createDataFrame(tmpRdd, constUtil.schema_251)
     
        val udf_pdate = udf[String, String]{xstr => constUtil.dateMap(i)}
-       tmp_DF = tmp_DF.withColumn("pdate", udf_pdate(tmp_DF("pri_key")))
+       tmp_DF = tmp_DF.withColumn("pdate", udf_pdate(tmp_DF("pri_key")))   //随便找一个变量进行udf"pri_key"
        //tmp_DF.show(5)
        if(i==start)
          All_DF = tmp_DF
@@ -127,5 +127,16 @@ object get_from_HDFS {
 			  fraud_join_DF
   
      }
+    
+    
+    def get_filled_DF_byday(ss: SparkSession, date:String):DataFrame = {
+       get_filled_DF(ss,date,date)
+    }
+    
+    def get_fraud_join_DF_byday(ss: SparkSession, date:String):DataFrame = {
+       get_fraud_join_DF(ss,date,date)
+    }
+    
+    
     
 }
