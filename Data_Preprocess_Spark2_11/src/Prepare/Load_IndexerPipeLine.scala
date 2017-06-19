@@ -39,7 +39,7 @@ import org.apache.spark.ml.PipelineStage
 import org.apache.spark.ml.PipelineModel
 
 
-object save_Alldata_bycards_3 {
+object Load_IndexerPipeLine {
   
 
   def main(args: Array[String]): Unit = {
@@ -62,34 +62,26 @@ object save_Alldata_bycards_3 {
   
     import ss.implicits._
     import ss.sql
-    
-    val sc = ss.sparkContext
  
     val startTime = System.currentTimeMillis(); 
-      
-    val startdate = IntelUtil.varUtil.startdate
-    val enddate = IntelUtil.varUtil.enddate
-    val rangedir = IntelUtil.varUtil.rangeDir  
-    
-    var usedArr_filled = IntelUtil.constUtil.usedArr.map{x => x + "_filled"}
-    
-    val counterfeit_cards= sc.textFile(rangedir + "counterfeit_cards").collect 
-    
-    val sample_cards= sc.textFile(rangedir + "All_sample_cards").take(10000)
-      
-    var all_cards_list = sample_cards.union(counterfeit_cards)
-      
-	 // var counterfeit_cards_list = counter_cards_Rdd.map(r=>r.getString(0)).collect()
- 
-    var AllData = IntelUtil.get_from_HDFS.get_filled_DF(ss, startdate, enddate).repartition(1000) 
-   
-    val Alldata_by_cards = AllData.filter(AllData("pri_acct_no_conv").isin(all_cards_list:_*))
+//    val startdate = IntelUtil.varUtil.startdate
+//    val enddate = IntelUtil.varUtil.enddate
+    val rangedir = IntelUtil.varUtil.rangeDir 
      
-    Alldata_by_cards.selectExpr(usedArr_filled:_*).rdd.map(_.mkString(",")).saveAsTextFile(rangedir + "Alldata_by_cards")
-    
-    println("All done in " + (System.currentTimeMillis()-startTime)/(1000*60) + " minutes." ) 
-    
-    
+    var input_dir = rangedir + "Labeled_All"
+    var testData = IntelUtil.get_from_HDFS.get_processed_DF(ss, input_dir).persist(StorageLevel.MEMORY_AND_DISK_SER)// .cache         //.persist(StorageLevel.MEMORY_AND_DISK_SER)//
+    testData.show(5)
+    println("testData done in " + (System.currentTimeMillis()-startTime)/(1000*60) + " minutes." )
+      
+    val my_index_Model = PipelineModel.load("xrli/IntelDNN/index_Model")
+    println("Load pipeline done in " + (System.currentTimeMillis()-startTime)/(1000*60) + " minutes." )
+     
+    println("start transform data!")
+    var vec_data = my_index_Model.transform(testData)
+    println("Indexed done in " + (System.currentTimeMillis()-startTime)/(1000*60) + " minutes." )    
+    vec_data.show(5)
+  
+    println("All done in " + (System.currentTimeMillis()-startTime)/(1000*60) + " minutes." )   
   }
   
     

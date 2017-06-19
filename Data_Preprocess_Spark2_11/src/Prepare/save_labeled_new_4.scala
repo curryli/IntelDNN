@@ -98,6 +98,12 @@ object save_labeled_new_4 {
   
     var normaldata_filled = Alldata_by_cards_filled.except(counterfeit_filled)
      
+     
+    var counterfeit_related_all_data = Alldata_by_cards_filled.filter(Alldata_by_cards_filled("pri_acct_no_conv_filled").isin(counterfeit_cards_list:_*))
+    println("counterfeit_related_fraud_data count is " + counterfeit_filled.count) 
+    println("counterfeit_related_all_data count is " + counterfeit_related_all_data.count) 
+    println("normaldata_filled count is " + normaldata_filled.count) 
+    
     val udf_Map0 = udf[Double, String]{xstr => 0.0}
     val udf_Map1 = udf[Double, String]{xstr => 1.0}
      

@@ -138,5 +138,16 @@ object get_from_HDFS {
     }
     
     
+    def get_processed_DF(ss: SparkSession, input_dir: String):DataFrame = {
+       val sc = ss.sparkContext
+       
+       val Row_RDD = sc.textFile(input_dir).map{str=>
+           var tmparr = str.split(",")         
+           tmparr = tmparr.map { x => x.toString()}    
+           Row.fromSeq(tmparr.toSeq)
+       }
+       var DF_schema_used = ss.createDataFrame(Row_RDD, IntelUtil.constUtil.schema_used)
+       DF_schema_used
+    }
     
 }
