@@ -75,7 +75,7 @@ object save_Alldata_bycards_3 {
     
     val counterfeit_cards= sc.textFile(rangedir + "counterfeit_cards").collect 
     
-    val sample_cards= sc.textFile(rangedir + "All_sample_cards").take(10000)
+    val sample_cards= sc.textFile(rangedir + "All_sample_cards").distinct().take(10000)
       
     var all_cards_list = sample_cards.union(counterfeit_cards)
       

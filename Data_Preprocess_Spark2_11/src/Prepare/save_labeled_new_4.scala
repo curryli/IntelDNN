@@ -49,8 +49,7 @@ object save_labeled_new_4 {
     Logger.getLogger("akka").setLevel(Level.ERROR);
     Logger.getLogger("hive").setLevel(Level.WARN);
     Logger.getLogger("parse").setLevel(Level.ERROR); 
-    
-    //val sparkConf = new SparkConf().setAppName("spark2SQL")
+     
     val warehouseLocation = "spark-warehouse"
     
     val ss = SparkSession
@@ -79,30 +78,31 @@ object save_labeled_new_4 {
     val all_cards = sample_cards.union(counterfeit_cards)
     val all_cards_list = all_cards.collect()
    
-    val Alldata_by_cards = sc.textFile(rangedir + "Alldata_by_cards").map{str=>
-           var tmparr = str.split(",")         
-           tmparr = tmparr.map { x => x.toString()}    
-           Row.fromSeq(tmparr.toSeq)
-       }
-    
-    val counterfeit = sc.textFile(rangedir + "counterfeit_filled").map{str=>
-           var tmparr = str.split(",")         
-           tmparr = tmparr.map { x => x.toString()}    
-           Row.fromSeq(tmparr.toSeq)
-       }
-    
-    var counterfeit_filled = ss.createDataFrame(counterfeit, IntelUtil.constUtil.schema_used)
-    var Alldata_by_cards_filled = ss.createDataFrame(Alldata_by_cards, IntelUtil.constUtil.schema_used)
-    
+    var Alldata_by_cards_dir = rangedir + "Alldata_by_cards"
+    var counterfeit_dir = rangedir + "counterfeit_filled"
+    var Alldata_by_cards_filled = IntelUtil.get_from_HDFS.get_processed_DF(ss, Alldata_by_cards_dir)
+    var counterfeit_filled = IntelUtil.get_from_HDFS.get_processed_DF(ss, counterfeit_dir)
     println("Alldata_by_cards_filled done in " + (System.currentTimeMillis()-startTime)/(1000*60) + " minutes." ) 
-  
+ 
+    //////////////
+    val countdf = Alldata_by_cards_filled.groupBy("pri_acct_no_conv_filled").agg(count("trans_at_filled") as "counts") 
+    val filtered_cards = countdf.filter(countdf("counts")<1000)
+    filtered_cards.show(5)
+    println("filtered cards count is " + filtered_cards.count)
+     
+    Alldata_by_cards_filled = Alldata_by_cards_filled.join(filtered_cards, Alldata_by_cards_filled("pri_acct_no_conv_filled")===filtered_cards("pri_acct_no_conv_filled"), "leftsemi")
+    println("Alldata_by_cards_filled count is " + Alldata_by_cards_filled.count) 
+    Alldata_by_cards_filled.show(5)
+  //////////////////////////
+    
+    
     var normaldata_filled = Alldata_by_cards_filled.except(counterfeit_filled)
-     
-     
+      
     var counterfeit_related_all_data = Alldata_by_cards_filled.filter(Alldata_by_cards_filled("pri_acct_no_conv_filled").isin(counterfeit_cards_list:_*))
     println("counterfeit_related_fraud_data count is " + counterfeit_filled.count) 
     println("counterfeit_related_all_data count is " + counterfeit_related_all_data.count) 
     println("normaldata_filled count is " + normaldata_filled.count) 
+
     
     val udf_Map0 = udf[Double, String]{xstr => 0.0}
     val udf_Map1 = udf[Double, String]{xstr => 1.0}
@@ -111,13 +111,9 @@ object save_labeled_new_4 {
     var counterfeit_labeled = counterfeit_filled.withColumn("isFraud", udf_Map1(counterfeit_filled("trans_md_filled")))
     var LabeledData = counterfeit_labeled.unionAll(NormalData_labeled)
     LabeledData.show(5)
-        
          
-    LabeledData.rdd.map(_.mkString(",")).saveAsTextFile(rangedir + "Labeled_All")
-        
-     
-//////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-    
+    //LabeledData.rdd.map(_.mkString(",")).saveAsTextFile(rangedir + "Labeled_All")
+          
     println("All done in " + (System.currentTimeMillis()-startTime)/(1000*60) + " minutes." ) 
     
     
