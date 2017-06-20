@@ -48,8 +48,11 @@ object LabelFlow {
     //可以调整
     val TF_ratio = 10
      
+    
+    
     var counterfeit_cards_num = 0L
     var normal_cards_num = 0L
+    var counterfeit_related_fraud_count = 0L
      
  
   def main(args: Array[String]): Unit = {
@@ -77,10 +80,16 @@ object LabelFlow {
     
     save_counterfeit_1(ss)
     println("counterfeit_cards count is " + counterfeit_cards_num)
+    println("step1 done in " + (System.currentTimeMillis()-startTime)/(1000*60) + " minutes." )
       
     save_sample_cards_2(ss)
-    save_Alldata_bycards_3(ss,counterfeit_cards_num:Long)
+    println("step2 done in " + (System.currentTimeMillis()-startTime)/(1000*60) + " minutes." )
+    
+    save_Alldata_bycards_3(ss)
+    println("step3 done in " + (System.currentTimeMillis()-startTime)/(1000*60) + " minutes." )
+    
     save_labeled_new_4(ss)
+    println("step4 done in " + (System.currentTimeMillis()-startTime)/(1000*60) + " minutes." )
   }
     
     
@@ -102,31 +111,35 @@ object LabelFlow {
         var AllData = IntelUtil.get_from_HDFS.get_filled_DF(ss, startdate, enddate).repartition(1000) 
          
         val counterfeit_related = AllData.filter(AllData("pri_acct_no_conv").isin(counterfeit_cards_list:_*))
-        println("counterfeit_related count is " + counterfeit_related.count()) 
+        println("counterfeit_related_all_data count is " + counterfeit_related.count()) 
          
         var counterfeit_fraud = counterfeit_related.join(counterfeit_infraud, counterfeit_related("sys_tra_no")===counterfeit_infraud("sys_tra_no"), "leftsemi")
         
         val counterfeit_filled = counterfeit_fraud.selectExpr(usedArr_filled:_*)
-        println("counterfeit_filled count is " + counterfeit_filled.count())
+        counterfeit_related_fraud_count = counterfeit_filled.count()
+        println("counterfeit_related_fraud_data count is " + counterfeit_related_fraud_count)
          
         counterfeit_filled.rdd.map(_.mkString(",")).saveAsTextFile(rangedir + "counterfeit_filled")
     }
     
     
-    def save_sample_cards_2(ss: SparkSession): Unit ={
+    def save_sample_cards_2(ss: SparkSession, sample_ratio: Double = 0.00001): Unit ={
         var AllData = IntelUtil.get_from_HDFS.get_filled_DF(ss, startdate, enddate).repartition(1000) 
-         
-        val All_sample_cards = AllData.sample(false, 0.000002, 0).select("pri_acct_no_conv").distinct()//.persist(StorageLevel.MEMORY_AND_DISK_SER) 
+        var tmp_ratio = counterfeit_related_fraud_count.toDouble/80000000.toDouble
+        var Ratio =  tmp_ratio min sample_ratio
+        
+        val All_sample_cards = AllData.sample(false, Ratio, 0).select("pri_acct_no_conv").distinct()//.persist(StorageLevel.MEMORY_AND_DISK_SER) 
         
         All_sample_cards.rdd.map(r=>r.getString(0)).coalesce(1).saveAsTextFile(rangedir + "All_sample_cards")
     }
     
-    def save_Alldata_bycards_3(ss: SparkSession, fraud_cards_num:Long): Unit ={
+    def save_Alldata_bycards_3(ss: SparkSession): Unit ={
         val sc = ss.sparkContext
         val counterfeit_cards= sc.textFile(rangedir + "counterfeit_cards").collect 
         
-        normal_cards_num = fraud_cards_num * TF_ratio
-        val sample_cards= sc.textFile(rangedir + "All_sample_cards").distinct().take(normal_cards_num.toInt)
+        normal_cards_num = counterfeit_cards_num * TF_ratio
+                
+        val sample_cards= sc.textFile(rangedir + "All_sample_cards").takeSample(false, normal_cards_num.toInt, 0)  
           
         var all_cards_list = sample_cards.union(counterfeit_cards)
             
@@ -165,8 +178,6 @@ object LabelFlow {
         var normaldata_filled = Alldata_by_cards_filled.except(counterfeit_filled)
           
         var counterfeit_related_all_data = Alldata_by_cards_filled.filter(Alldata_by_cards_filled("pri_acct_no_conv_filled").isin(counterfeit_cards_list:_*))
-        println("counterfeit_related_fraud_data count is " + counterfeit_filled.count) 
-        println("counterfeit_related_all_data count is " + counterfeit_related_all_data.count) 
         println("normaldata_filled count is " + normaldata_filled.count) 
         
         val udf_Map0 = udf[Double, String]{xstr => 0.0}
