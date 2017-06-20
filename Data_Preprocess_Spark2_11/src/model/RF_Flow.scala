@@ -148,12 +148,12 @@ object RF_Flow {
      println("Current Recall_P is: " + Recall_P)
      
      
-     val N_sample_ratio = 80000000/(FP_Cnt + TN_Cnt)   //(FP_Cnt + TN_Cnt)采样后实际为0的个数     80000000是采样前实际为0的个数
+     val N_sample_ratio = 80000000*31/(FP_Cnt + TN_Cnt)   //(FP_Cnt + TN_Cnt)采样后实际为0的个数     80000000*31是采样前实际为0的个数
      val Precision_P_Actual = TP_Cnt/(TP_Cnt + FP_Cnt*N_sample_ratio)
      val Recall_P_Actual = TP_Cnt/(TP_Cnt + FN_Cnt*N_sample_ratio)
 
      println("Actual Precision_P is: " + Precision_P_Actual)
-     println("Actual Recall_P is: " + Precision_P_Actual)     
+     println("Actual Recall_P is: " + Recall_P_Actual)     
       
       
     println("All done in " + (System.currentTimeMillis()-startTime)/(1000*60) + " minutes." )   
