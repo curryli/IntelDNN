@@ -44,6 +44,7 @@ import java.util.Calendar
 import scala.collection.mutable.HashMap
 
 object funUtil { 
+  
   def main(args: Array[String]) { 
     println(dayForWeek("20161001"))
   }
@@ -123,5 +124,34 @@ object funUtil {
     
     modified_vec
   }
+  
+  case class CF_Matrix(
+    val TP_Cnt: Double,
+    val TN_Cnt: Double,
+    val FP_Cnt: Double,
+    val FN_Cnt: Double,
+    val Precision_P: Double,
+    val Recall_P: Double
+  ) 
+    
+  
+  def get_CF_Matrix(predicted_DF: DataFrame): CF_Matrix={
+     val TP_Cnt = predicted_DF.filter(predicted_DF("label_idx") === predicted_DF("prediction")).filter(predicted_DF("label_idx")===1).count.toDouble
+     val TN_Cnt = predicted_DF.filter(predicted_DF("label_idx") === predicted_DF("prediction")).filter(predicted_DF("label_idx")===0).count.toDouble
+     val FP_Cnt = predicted_DF.filter(predicted_DF("label_idx") !== predicted_DF("prediction")).filter(predicted_DF("prediction")===1).count.toDouble
+     val FN_Cnt = predicted_DF.filter(predicted_DF("label_idx") !== predicted_DF("prediction")).filter(predicted_DF("prediction")===0).count.toDouble
+     println("TP_Cnt is: " + TP_Cnt)
+     println("TN_Cnt is: " + TN_Cnt)
+     println("FP_Cnt is: " + FP_Cnt)
+     println("FN_Cnt is: " + FN_Cnt)
+     
+     val Precision_P = TP_Cnt/(TP_Cnt + FP_Cnt)
+     val Recall_P = TP_Cnt/(TP_Cnt + FN_Cnt)
+     val result = new CF_Matrix(TP_Cnt,TN_Cnt,FP_Cnt,FN_Cnt,Precision_P,Recall_P)
+     result
+  }
+  
+  
+  
   
 }

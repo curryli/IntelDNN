@@ -29,7 +29,7 @@ object get_from_HDFS {
     
     for(i <- start to end) {
        val filename = "/user/hddtmn/in_common_his_trans/" + constUtil.dateMap(i) + "_correct"
-       println(filename)
+       //println(filename)
        val tmpRdd = sc.textFile(filename).map{str=>
            var tmparr = str.split("\",\"")         
            tmparr = tmparr.map { x => x.toString()}    
@@ -50,7 +50,7 @@ object get_from_HDFS {
    }
     
   
-    def get_spilit_DF(ss: SparkSession, startdate:String, enddate:String):DataFrame = {
+    def get_split_DF(ss: SparkSession, startdate:String, enddate:String):DataFrame = {
         var AllData = get_origin_DF(ss, startdate, enddate)
 			  AllData.na.fill("isNull")
 			
@@ -92,7 +92,7 @@ object get_from_HDFS {
 
     
     def get_filled_DF(ss: SparkSession, startdate:String, enddate:String):DataFrame = {
-       var AllData = get_spilit_DF(ss, startdate, enddate)
+       var AllData = get_split_DF(ss, startdate, enddate)
        val usedArr =  constUtil.usedArr
        
        val udf_replaceEmpty = udf[String, String]{xstr => 
@@ -171,5 +171,11 @@ object get_from_HDFS {
        DF_schema_labeled
     }
         
+     
+//     def get_DF_by_transid(ss: SparkSession, input_dir: String):DataFrame = {
+//       val alldata = get_labeled_DF(ss, input_dir)
+//       alldata
+//     }
+     
     
 }
