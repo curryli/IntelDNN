@@ -177,5 +177,14 @@ object get_from_HDFS {
 //       alldata
 //     }
      
+      def get_labeled_noNAN(ss: SparkSession, input_dir: String):DataFrame = {
+       val sc = ss.sparkContext
+       
+       var labeledData = IntelUtil.get_from_HDFS.get_labeled_DF(ss, input_dir).cache         //.persist(StorageLevel.MEMORY_AND_DISK_SER)//
+       labeledData = labeledData.drop(constUtil.NAN_Arr:_*)
+       
+       labeledData
+    }
+     
     
 }

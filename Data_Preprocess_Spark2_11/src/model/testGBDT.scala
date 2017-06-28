@@ -41,7 +41,7 @@ import org.apache.spark.ml.feature.QuantileDiscretizer
 import scala.collection.mutable.HashMap
 
 
-object test {
+object testGBDT {
   val QD_money_num = 10
   val QD_disc_num = 10
    
@@ -78,14 +78,11 @@ object test {
     println("testData done in " + (System.currentTimeMillis()-startTime)/(1000*60) + " minutes." )
       
     var vec_data = labeledData
-//    val my_index_Model = PipelineModel.load("xrli/IntelDNN/index_Model")
-//    println("Load pipeline done in " + (System.currentTimeMillis()-startTime)/(1000*60) + " minutes." )
-//     
-//    println("start transform data!")
-//    var vec_data = my_index_Model.transform(labeledData)
-//    println("Indexed done in " + (System.currentTimeMillis()-startTime)/(1000*60) + " minutes." )    
-//    vec_data.show(5)
     
+    val udf_transid_type = udf[String, String]{xstr => xstr.substring(0,1)}
+    vec_data = vec_data.filter(udf_transid_type(vec_data("trans_id_filled"))==="S")
+    
+ 
     
     val QD_money = new QuantileDiscretizer().setInputCol("trans_at_filled").setOutputCol("trans_at_QD").setNumBuckets(QD_money_num)
     val QD_disc = new QuantileDiscretizer().setInputCol("total_disc_at_filled").setOutputCol("disc_at_QD").setNumBuckets(QD_disc_num)
@@ -123,18 +120,23 @@ object test {
      .fit(vec_data)  
        
       
-      val rfClassifier1 = new RandomForestClassifier()
+     var gbtClassifier = new GBTClassifier()
         .setLabelCol("label_idx")
         .setFeaturesCol("featureVector")
-        .setNumTrees(15)
-        .setMaxBins(10000)
-        .setThresholds(Array(50,1))    //增大这个数字，Recall变大，Precision变小
+        .setMaxIter(200)
+        .setImpurity("entropy")//.setImpurity("entropy")   "gini"
+        .setMaxDepth(3) //GDBT中的决策树要设置浅一些
+        .setStepSize(0.05)//范围是(0, 1]
+     
       
-      val pipeline = new Pipeline().setStages(Array(assembler,label_indexer, rfClassifier1))
+      val pipeline = new Pipeline().setStages(Array(assembler,label_indexer, gbtClassifier))
       
       val model = pipeline.fit(vec_data)
       
       var test_data = IntelUtil.get_from_HDFS.get_labeled_DF(ss, "xrli/IntelDNN/Counterfeit/201607/Labeled_All") 
+       
+      test_data  = test_data.filter(udf_transid_type(test_data("trans_id_filled"))==="S")
+    
        
       println("testData done in " + (System.currentTimeMillis()-startTime)/(1000*60) + " minutes." )
       test_data = QD_money_model.transform(test_data)
