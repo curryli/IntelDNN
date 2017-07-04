@@ -146,57 +146,14 @@ object get_from_HDFS {
            tmparr = tmparr.map { x => x.toString()}    
            Row.fromSeq(tmparr.toSeq)
        }
-       var DF_schema_used = ss.createDataFrame(Row_RDD, IntelUtil.constUtil.schema_used)
+       
+       val usedArr_filled =  constUtil.usedArr.map{x => x + "_filled"}
+       var DF_schema_used = ss.createDataFrame(Row_RDD, funUtil.get_schema(usedArr_filled))
        DF_schema_used
     }
     
-     def get_labeled_DF(ss: SparkSession, input_dir: String):DataFrame = {
-       val sc = ss.sparkContext
        
-       val Row_RDD = sc.textFile(input_dir).map{str=>
-           var tmparr = str.split(",")
-          //.:+ 是添加在尾部，  .+:是添加在头部
-           var day_week = funUtil.dayForWeek("2016" + tmparr(1).substring(0,4))
-           var hour = tmparr(1).substring(4,6)
-           var tmpList = List(tmparr(0).toString()).:+(day_week.toDouble).:+(hour.toDouble).:+(tmparr(1).toDouble).:+(tmparr(2).toDouble).:+(tmparr(3).toDouble)
-           for(i<- 4 to tmparr.length-1){
-             tmpList = tmpList.:+(tmparr(i).toString())
-           }
-             
-           Row.fromSeq(tmpList.toSeq)
-       }
-       
-       println("Row_RDD done")
-       var DF_schema_labeled = ss.createDataFrame(Row_RDD, IntelUtil.constUtil.schema_labeled)
-       DF_schema_labeled
-    }
         
      
-//     def get_DF_by_transid(ss: SparkSession, input_dir: String):DataFrame = {
-//       val alldata = get_labeled_DF(ss, input_dir)
-//       alldata
-//     }
-     
-      def get_labeled_noNAN(ss: SparkSession, input_dir: String):DataFrame = {
-       val sc = ss.sparkContext
-       
-       var labeledData = IntelUtil.get_from_HDFS.get_labeled_DF(ss, input_dir).cache         //.persist(StorageLevel.MEMORY_AND_DISK_SER)//
-       labeledData = labeledData.drop(constUtil.NAN_Arr:_*)
-       
-       labeledData
-    }
-     
-      
-     def get_indexed_DF(ss: SparkSession, input_dir: String):DataFrame = {
-       val sc = ss.sparkContext
-       
-       val Row_RDD = sc.textFile(input_dir).map{str=>
-           var tmparr = str.split(",")         
-           tmparr = tmparr.map { x => x.toString()}    
-           Row.fromSeq(tmparr.toSeq)
-       }
-       var DF_schema_used = ss.createDataFrame(Row_RDD,  funUtil.get_schema(constUtil.indexed_Arr))
-       DF_schema_used
-    }
-    
+ 
 }

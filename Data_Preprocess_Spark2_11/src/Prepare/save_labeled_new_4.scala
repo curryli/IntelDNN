@@ -112,7 +112,7 @@ object save_labeled_new_4 {
     var LabeledData = counterfeit_labeled.unionAll(NormalData_labeled)
     LabeledData.show(5)
          
-    //LabeledData.rdd.map(_.mkString(",")).saveAsTextFile(rangedir + "Labeled_All")
+    LabeledData.rdd.map(_.mkString(",")).saveAsTextFile(rangedir + "Labeled_All")
           
     println("All done in " + (System.currentTimeMillis()-startTime)/(1000*60) + " minutes." ) 
     

@@ -44,6 +44,9 @@ import scala.collection.mutable.Map
 import org.apache.spark.ml.linalg.Vector
 import org.apache.spark.ml.linalg.Vectors
 
+
+//onehot估计也行
+
 object dummy {
   val QD_money_num = 10
   val QD_disc_num = 10

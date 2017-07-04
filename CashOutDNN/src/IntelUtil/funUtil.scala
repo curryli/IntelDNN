@@ -164,7 +164,6 @@ object funUtil {
     pipelineStages
   }
   
-  
   def get_schema(arr: Array[String]): StructType ={
     var tmp_schema = new StructType()
     for(item<-arr){
@@ -172,5 +171,5 @@ object funUtil {
     }
     tmp_schema
   }
-   
+  
 }
