@@ -157,7 +157,7 @@ object funUtil {
     for (col <- DisperseArr) {
       pipelineStages += new StringIndexer()
         .setInputCol(col)
-        .setOutputCol(col + "_indexed")
+        .setOutputCol(col + "_idx")
         .setHandleInvalid("skip")
     }
     

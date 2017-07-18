@@ -17,8 +17,8 @@ object varUtil {
   def main(args: Array[String]) { 
   }
 		
-  val startdate = "20160801"
-  val enddate = "20160831"
-  val rangeDir = "xrli/IntelDNN/Counterfeit/201608/" 
+  val startdate = "20161201"
+  val enddate = "20161231"
+  val rangeDir = "xrli/IntelDNN/Counterfeit/201612/" 
 			
 }

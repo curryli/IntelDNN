@@ -153,7 +153,46 @@ object get_from_HDFS {
     }
     
        
-        
+    def get_labeled_DF(ss: SparkSession, input_dir: String):DataFrame = {
+       val sc = ss.sparkContext
+       
+       val Row_RDD = sc.textFile(input_dir).map{str=>
+           var tmparr = str.split(",")
+          //.:+ 是添加在尾部，  .+:是添加在头部
+           var day_week = funUtil.dayForWeek("2016" + tmparr(1).substring(0,4))
+           var hour = tmparr(1).substring(4,6)
+           var tmpList = List(tmparr(0).toString()).:+(tmparr(1).toString).:+(day_week.toString).:+(hour.toString).:+(tmparr(2).toString).:+(tmparr(3).toString)
+           for(i<- 4 to tmparr.length-1){
+             tmpList = tmpList.:+(tmparr(i).toString())
+           }
+             
+           Row.fromSeq(tmpList.toSeq)
+       }
+       
+       println("Row_RDD done")
+       var DF_schema_labeled = ss.createDataFrame(Row_RDD, funUtil.get_schema(constUtil.labeledArr))
+       DF_schema_labeled
+    }     
      
  
+    
+   def get_indexed_DF(ss: SparkSession, input_dir: String):DataFrame = {
+       val sc = ss.sparkContext
+       
+       val Row_RDD = sc.textFile(input_dir).map{str=>
+           var tmparr = str.split(",")      
+           
+           var tmpList = List(tmparr(0).toString()).:+(tmparr(1).toString).:+(tmparr(2).toDouble)//.:+(tmparr(3).toDouble).:+(tmparr(4).toDouble).:+(tmparr(5).toDouble)
+
+           for(i<- 3 to tmparr.length-1){
+             tmpList = tmpList.:+(tmparr(i).toDouble)
+           }   
+           
+           
+           Row.fromSeq(tmpList.toSeq)
+       }
+       var DF_schema_used = ss.createDataFrame(Row_RDD, constUtil.schema_labeled)
+       DF_schema_used
+    }
+         
 }

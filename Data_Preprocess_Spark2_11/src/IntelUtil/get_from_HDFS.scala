@@ -158,7 +158,7 @@ object get_from_HDFS {
           //.:+ 是添加在尾部，  .+:是添加在头部
            var day_week = funUtil.dayForWeek("2016" + tmparr(1).substring(0,4))
            var hour = tmparr(1).substring(4,6)
-           var tmpList = List(tmparr(0).toString()).:+(day_week.toDouble).:+(hour.toDouble).:+(tmparr(1).toDouble).:+(tmparr(2).toDouble).:+(tmparr(3).toDouble)
+           var tmpList = List(tmparr(0).toString()).:+(tmparr(1).toString).:+(day_week.toDouble).:+(hour.toDouble).:+(tmparr(2).toDouble).:+(tmparr(3).toDouble)
            for(i<- 4 to tmparr.length-1){
              tmpList = tmpList.:+(tmparr(i).toString())
            }
