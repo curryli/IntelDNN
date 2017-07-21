@@ -45,8 +45,7 @@ import org.apache.spark.ml.feature.OneHotEncoder
 import org.apache.spark.ml.feature.ChiSqSelector
 import org.apache.spark.ml.feature.ChiSqSelectorModel
 
-object SaveIndexed {
- 
+object CrossTab_idx {
  
 
   def main(args: Array[String]): Unit = {
@@ -74,32 +73,23 @@ object SaveIndexed {
  
     val rangedir = IntelUtil.varUtil.rangeDir 
      
-    var input_dir = rangedir + "Labeled_All"
-    var labeledData = IntelUtil.get_from_HDFS.get_labeled_DF(ss, input_dir).persist(StorageLevel.MEMORY_AND_DISK_SER)// .cache         //.persist(StorageLevel.MEMORY_AND_DISK_SER)//
+    var input_dir = rangedir + "idx_withlabel"
+    var labeledData = IntelUtil.get_from_HDFS.get_indexed_DF(ss, input_dir).persist(StorageLevel.MEMORY_AND_DISK_SER)// .cache         //.persist(StorageLevel.MEMORY_AND_DISK_SER)//
     labeledData.show(10)
-    
      
-    val no_idx_arr = labeledData.columns.slice(0,6)
-    
-    val Arr_to_idx = labeledData.columns.toList.drop(6).toArray   ///.dropRight(1)
-    
-    
-    val CatVecArr = Arr_to_idx.map { x => x + "_idx"}
-     //CatVecArr.foreach {println }
-     
-    val labeled_arr = no_idx_arr.++(CatVecArr)
-    labeled_arr.foreach {println }
-    
-    val pipeline_idx = new Pipeline().setStages(IntelUtil.funUtil.Multi_idx_Pipeline(Arr_to_idx).toArray)
-
-    labeledData = pipeline_idx.fit(labeledData).transform(labeledData)
-    println("idx done in " + (System.currentTimeMillis()-startTime)/(1000*60) + " minutes." )    
-    labeledData.show(5)
-    
-    println(labeledData.columns.mkString(","))
+    //val no_idx_arr = labeledData.columns.slice(0,6)
+    val Arr_dist = labeledData.columns.toList.drop(6).dropRight(1).toArray   ///.dropRight(1)
   
-    labeledData.selectExpr(labeled_arr:_*).rdd.map(_.mkString(",")).saveAsTextFile(rangedir + "idx_withlabel")
-     
+    labeledData.describe().show
+    
+    for(col <- Arr_dist){
+      labeledData.stat.crosstab(col, "label").show
+      println(labeledData.stat.corr(col, "label"))
+    }
+    
+    //labeledData.stat.freqItems(Arr_dist, 0.5).show()
+    //println(labeledData.stat.approxQuantile("trans_at", Array(0.2,0.4,0.6,0.8), 0.2))
+    
     
     println("All done in " + (System.currentTimeMillis()-startTime)/(1000*60) + " minutes." )   
   }
