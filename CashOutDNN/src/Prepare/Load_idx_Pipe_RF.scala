@@ -37,18 +37,15 @@ import scala.reflect.runtime.universe
 import org.apache.spark.ml.Pipeline
 import org.apache.spark.ml.PipelineStage
 import org.apache.spark.ml.PipelineModel
-import org.apache.spark.ml.feature.QuantileDiscretizer
-import scala.collection.mutable.HashMap
-//import org.apache.spark.mllib.stat.Statistics
 
-import org.apache.spark.ml.feature.OneHotEncoder
-import org.apache.spark.ml.feature.ChiSqSelector
-import org.apache.spark.ml.feature.ChiSqSelectorModel
 
-object SaveIndexed {
- 
- 
-
+object Load_idx_Pipe_RF {
+  
+   val startdate = IntelUtil.varUtil.startdate
+   val enddate = IntelUtil.varUtil.enddate
+   val rangedir = IntelUtil.varUtil.rangeDir 
+   var idx_modelname = rangedir + "index_Model_0801"
+   
   def main(args: Array[String]): Unit = {
 
     //屏蔽日志
@@ -71,42 +68,21 @@ object SaveIndexed {
     import ss.sql
  
     val startTime = System.currentTimeMillis(); 
- 
-    val rangedir = IntelUtil.varUtil.rangeDir 
+   
+    var testData = IntelUtil.get_from_HDFS.get_filled_DF(ss, startdate, enddate).repartition(5000).persist(StorageLevel.MEMORY_AND_DISK_SER)// .cache         //.persist(StorageLevel.MEMORY_AND_DISK_SER)//
+    testData.show(5)
+    println("testData done in " + (System.currentTimeMillis()-startTime)/(1000*60) + " minutes." )
+      
+    val my_index_Model = PipelineModel.load(idx_modelname)
+    println("Load pipeline done in " + (System.currentTimeMillis()-startTime)/(1000*60) + " minutes." )
      
-    var input_dir = rangedir + "Labeled_All"
-    var labeledData = IntelUtil.get_from_HDFS.get_labeled_DF(ss, input_dir).persist(StorageLevel.MEMORY_AND_DISK_SER)// .cache         //.persist(StorageLevel.MEMORY_AND_DISK_SER)//
-    //labeledData.show(10)
-    
-    //去除借记卡 
-    labeledData = labeledData.filter(labeledData("card_attr").=!=("01") )
-     
-    val no_idx_arr = labeledData.columns.slice(0,6)
-    
-    val Arr_to_idx = labeledData.columns.toList.drop(6).toArray   ///.dropRight(1)
-    
-    
-    val CatVecArr = Arr_to_idx.map { x => x + "_idx"}
-     //CatVecArr.foreach {println }
-     
-    val labeled_arr = no_idx_arr.++(CatVecArr)
-    labeled_arr.foreach {println }
-    
-    val pipeline_idx = new Pipeline().setStages(IntelUtil.funUtil.Multi_idx_Pipeline(Arr_to_idx).toArray)
-
-    labeledData = pipeline_idx.fit(labeledData).transform(labeledData)
-    println("idx done in " + (System.currentTimeMillis()-startTime)/(1000*60) + " minutes." )    
-    labeledData.show(5)
-    
-    println(labeledData.columns.mkString(","))
+    println("start transform data!")
+    var vec_data = my_index_Model.transform(testData)
+    println("Indexed done in " + (System.currentTimeMillis()-startTime)/(1000*60) + " minutes." )    
+    vec_data.show(5)
   
-    labeledData.selectExpr(labeled_arr:_*).rdd.map(_.mkString(",")).saveAsTextFile(rangedir + "idx_withlabel")
-     
-    
     println("All done in " + (System.currentTimeMillis()-startTime)/(1000*60) + " minutes." )   
   }
   
-  
-
     
 }

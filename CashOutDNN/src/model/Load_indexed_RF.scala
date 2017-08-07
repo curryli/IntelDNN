@@ -1,4 +1,4 @@
-package Prepare
+package model
 import org.apache.log4j.Level
 import org.apache.log4j.Logger
 import org.apache.spark._
@@ -39,16 +39,10 @@ import org.apache.spark.ml.PipelineStage
 import org.apache.spark.ml.PipelineModel
 import org.apache.spark.ml.feature.QuantileDiscretizer
 import scala.collection.mutable.HashMap
-//import org.apache.spark.mllib.stat.Statistics
 
-import org.apache.spark.ml.feature.OneHotEncoder
-import org.apache.spark.ml.feature.ChiSqSelector
-import org.apache.spark.ml.feature.ChiSqSelectorModel
 
-object SaveIndexed {
+object Load_indexed_RF {
  
- 
-
   def main(args: Array[String]): Unit = {
 
     //屏蔽日志
@@ -74,39 +68,68 @@ object SaveIndexed {
  
     val rangedir = IntelUtil.varUtil.rangeDir 
      
-    var input_dir = rangedir + "Labeled_All"
-    var labeledData = IntelUtil.get_from_HDFS.get_labeled_DF(ss, input_dir).persist(StorageLevel.MEMORY_AND_DISK_SER)// .cache         //.persist(StorageLevel.MEMORY_AND_DISK_SER)//
-    //labeledData.show(10)
-    
-    //去除借记卡 
-    labeledData = labeledData.filter(labeledData("card_attr").=!=("01") )
-     
-    val no_idx_arr = labeledData.columns.slice(0,6)
-    
-    val Arr_to_idx = labeledData.columns.toList.drop(6).toArray   ///.dropRight(1)
-    
-    
-    val CatVecArr = Arr_to_idx.map { x => x + "_idx"}
-     //CatVecArr.foreach {println }
-     
-    val labeled_arr = no_idx_arr.++(CatVecArr)
-    labeled_arr.foreach {println }
-    
-    val pipeline_idx = new Pipeline().setStages(IntelUtil.funUtil.Multi_idx_Pipeline(Arr_to_idx).toArray)
-
-    labeledData = pipeline_idx.fit(labeledData).transform(labeledData)
-    println("idx done in " + (System.currentTimeMillis()-startTime)/(1000*60) + " minutes." )    
+    var input_dir = rangedir + "idx_withlabel"
+    var labeledData = IntelUtil.get_from_HDFS.get_indexed_DF(ss, input_dir).persist(StorageLevel.MEMORY_AND_DISK_SER)// .cache         //.persist(StorageLevel.MEMORY_AND_DISK_SER)//
     labeledData.show(5)
+ 
+    println("testData done in " + (System.currentTimeMillis()-startTime)/(1000*60) + " minutes." )
+      
+    var vec_data = labeledData
     
-    println(labeledData.columns.mkString(","))
-  
-    labeledData.selectExpr(labeled_arr:_*).rdd.map(_.mkString(",")).saveAsTextFile(rangedir + "idx_withlabel")
+//    val udf_transid_type = udf[String, String]{xstr => xstr.substring(0,1)}
+//    vec_data = vec_data.filter(udf_transid_type(vec_data("trans_id_filled"))==="S")
      
+  
     
+    
+     //该数组李必须都是doubletype，否则VectorAssembler报错
+    val CatVecArr = labeledData.columns.toList.drop(1).dropRight(1).toArray   ///.dropRight(1)
+      
+      
+    val assembler = new VectorAssembler()
+      .setInputCols(CatVecArr)
+      .setOutputCol("featureVector")
+    
+    val label_indexer = new StringIndexer()
+     .setInputCol("label")
+     .setOutputCol("label_idx")
+     .fit(vec_data)  
+       
+      
+    val rfClassifier = new RandomForestClassifier()
+        .setLabelCol("label_idx")
+        .setFeaturesCol("featureVector")
+        .setNumTrees(200)
+        .setMaxBins(10000)
+        .setMinInstancesPerNode(2)
+      //  .setThresholds(Array(10,1))
+        //为每个分类设置一个阈值，参数的长度必须和类的个数相等。最终的分类结果会是p/t最大的那个分类，其中p是通过Bayes计算出来的结果，t是阈值。 
+        //这对于训练样本严重不均衡的情况尤其重要，比如分类0有200万数据，而分类1有2万数据，此时应用new NaiveBayes().setThresholds(Array(100.0,1.0))    这里t1=100  t2=1
+     
+      
+      val Array(trainingData, testData) = vec_data.randomSplit(Array(0.8, 0.2))  
+        
+      val pipeline = new Pipeline().setStages(Array(assembler,label_indexer, rfClassifier))
+      
+      val model = pipeline.fit(trainingData)
+      
+       
+       
+      val predictionResult = model.transform(testData)
+        
+      val eval_result = IntelUtil.funUtil.get_CF_Matrix(predictionResult)
+       
+     println("Current Precision_P is: " + eval_result.Precision_P)
+     println("Current Recall_P is: " + eval_result.Recall_P)
+     
+     
+ 
     println("All done in " + (System.currentTimeMillis()-startTime)/(1000*60) + " minutes." )   
+   
+     
   }
   
   
-
+  
     
 }

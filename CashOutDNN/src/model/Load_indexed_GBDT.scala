@@ -1,4 +1,4 @@
-package Prepare
+package model
 import org.apache.log4j.Level
 import org.apache.log4j.Logger
 import org.apache.spark._
@@ -39,16 +39,10 @@ import org.apache.spark.ml.PipelineStage
 import org.apache.spark.ml.PipelineModel
 import org.apache.spark.ml.feature.QuantileDiscretizer
 import scala.collection.mutable.HashMap
-//import org.apache.spark.mllib.stat.Statistics
 
-import org.apache.spark.ml.feature.OneHotEncoder
-import org.apache.spark.ml.feature.ChiSqSelector
-import org.apache.spark.ml.feature.ChiSqSelectorModel
 
-object SaveIndexed {
+object Load_indexed_GBDT {
  
- 
-
   def main(args: Array[String]): Unit = {
 
     //屏蔽日志
@@ -74,39 +68,66 @@ object SaveIndexed {
  
     val rangedir = IntelUtil.varUtil.rangeDir 
      
-    var input_dir = rangedir + "Labeled_All"
+    var input_dir = rangedir + "idx_withlabel"
     var labeledData = IntelUtil.get_from_HDFS.get_labeled_DF(ss, input_dir).persist(StorageLevel.MEMORY_AND_DISK_SER)// .cache         //.persist(StorageLevel.MEMORY_AND_DISK_SER)//
-    //labeledData.show(10)
-    
-    //去除借记卡 
-    labeledData = labeledData.filter(labeledData("card_attr").=!=("01") )
-     
-    val no_idx_arr = labeledData.columns.slice(0,6)
-    
-    val Arr_to_idx = labeledData.columns.toList.drop(6).toArray   ///.dropRight(1)
-    
-    
-    val CatVecArr = Arr_to_idx.map { x => x + "_idx"}
-     //CatVecArr.foreach {println }
-     
-    val labeled_arr = no_idx_arr.++(CatVecArr)
-    labeled_arr.foreach {println }
-    
-    val pipeline_idx = new Pipeline().setStages(IntelUtil.funUtil.Multi_idx_Pipeline(Arr_to_idx).toArray)
-
-    labeledData = pipeline_idx.fit(labeledData).transform(labeledData)
-    println("idx done in " + (System.currentTimeMillis()-startTime)/(1000*60) + " minutes." )    
     labeledData.show(5)
+ 
+    println("testData done in " + (System.currentTimeMillis()-startTime)/(1000*60) + " minutes." )
+      
+    var vec_data = labeledData
     
-    println(labeledData.columns.mkString(","))
-  
-    labeledData.selectExpr(labeled_arr:_*).rdd.map(_.mkString(",")).saveAsTextFile(rangedir + "idx_withlabel")
+//    val udf_transid_type = udf[String, String]{xstr => xstr.substring(0,1)}
+//    vec_data = vec_data.filter(udf_transid_type(vec_data("trans_id_filled"))==="S")
      
+  
     
+    
+     //该数组李必须都是doubletype，否则VectorAssembler报错
+    val CatVecArr = labeledData.columns.toList.drop(1).dropRight(1).toArray   ///.dropRight(1)
+      
+      
+    val assembler = new VectorAssembler()
+      .setInputCols(CatVecArr)
+      .setOutputCol("featureVector")
+    
+    val label_indexer = new StringIndexer()
+     .setInputCol("label")
+     .setOutputCol("label_idx")
+     .fit(vec_data)  
+       
+      
+     var gbtClassifier = new GBTClassifier()
+        .setLabelCol("label_idx")
+        .setFeaturesCol("featureVector")
+        .setMaxIter(200)
+        .setImpurity("entropy")//.setImpurity("entropy")   "gini"
+        .setMaxDepth(3) //GDBT中的决策树要设置浅一些
+        .setStepSize(0.001)//范围是(0, 1]
+     
+      
+      val Array(trainingData, testData) = vec_data.randomSplit(Array(0.8, 0.2))  
+        
+      val pipeline = new Pipeline().setStages(Array(assembler,label_indexer, gbtClassifier))
+      
+      val model = pipeline.fit(trainingData)
+      
+       
+       
+      val predictionResult = model.transform(testData)
+        
+      val eval_result = IntelUtil.funUtil.get_CF_Matrix(predictionResult)
+       
+     println("Current Precision_P is: " + eval_result.Precision_P)
+     println("Current Recall_P is: " + eval_result.Recall_P)
+     
+     
+ 
     println("All done in " + (System.currentTimeMillis()-startTime)/(1000*60) + " minutes." )   
+   
+     
   }
   
   
-
+  
     
 }

@@ -45,7 +45,7 @@ import org.apache.spark.ml.feature.OneHotEncoder
 import org.apache.spark.ml.feature.ChiSqSelector
 import org.apache.spark.ml.feature.ChiSqSelectorModel
 
-object CrossTab_All {
+object CrossTab_NoJoin {
     val startdate = IntelUtil.varUtil.startdate
     val enddate = IntelUtil.varUtil.enddate
     val usedArr_filled = IntelUtil.constUtil.usedArr.map{x => x + "_filled"}
@@ -76,33 +76,15 @@ object CrossTab_All {
  
     val rangedir = IntelUtil.varUtil.rangeDir 
      
-    var tmpData = IntelUtil.get_from_HDFS.get_filled_DF(ss, startdate, enddate)
+    var AllData = IntelUtil.get_from_HDFS.get_filled_DF(ss, startdate, enddate)
     
-    var AllData =  tmpData.sample(false, 0.0000001, 0).cache
-    println(AllData.count())
-    //AllData.show()
     
-    var fraud_join_Data = IntelUtil.get_from_HDFS.get_fraud_join_DF(ss, startdate, enddate).persist(StorageLevel.MEMORY_AND_DISK_SER)    
-     
-
-    println("fraudType_filled done in " + (System.currentTimeMillis()-startTime)/(1000*60) + " minutes." )   
-        
-    //var normaldata_filled =AllData.except(fraudType_filled)
-    
-    //val fraud_key = fraudType_filled.select(concat($"sys_tra_no_filled", lit(" "), $"pri_acct_no_conv_filled", lit(" "), $"mchnt_cd_filled", lit(" "),$"pdate_filled"))
-    
-    val fraud_concat = fraud_join_Data.withColumn("concat_key", concat($"sys_tra_no", lit(" "), $"pri_acct_no_conv", lit(" "), $"mchnt_cd", lit(" "),$"pdate"))
-    AllData = AllData.withColumn("concat_key", concat($"sys_tra_no", lit(" "), $"pri_acct_no_conv", lit(" "), $"mchnt_cd", lit(" "),$"pdate"))
-   
     var fraudType_dir = rangedir + "fraudType_filled"
     var fraudType_filled = IntelUtil.get_from_HDFS.get_processed_DF(ss, fraudType_dir)
     
-    var All_fraud = AllData.join(fraud_concat, AllData("concat_key")===fraud_concat("concat_key"), "leftouter").drop(AllData("concat_key"))
-    //All_fraud.show(20)
     
-    var normaldata_filled = All_fraud.filter(All_fraud("concat_key").isNull)     
     
-    normaldata_filled = normaldata_filled.selectExpr(usedArr_filled:_*)                                           
+    var normaldata_filled = AllData.selectExpr(usedArr_filled:_*)                                           
     
     println("normaldata_filled done in " + (System.currentTimeMillis()-startTime)/(1000*60) + " minutes." ) 
            
@@ -113,10 +95,11 @@ object CrossTab_All {
     var fraudType_labeled = fraudType_filled.withColumn("label", udf_Map1(fraudType_filled("trans_md_filled")))
     var labeledData = fraudType_labeled.unionAll(NormalData_labeled)
      
+    labeledData.describe().show
+        
     val Arr_dist = labeledData.columns.toList.drop(4).dropRight(1).toArray   ///.dropRight(1)
   
-    labeledData.describe().show
-    
+ 
     for(col <- Arr_dist){
       labeledData.stat.crosstab(col, "label").show
       //println(labeledData.stat.corr(col, "label"))

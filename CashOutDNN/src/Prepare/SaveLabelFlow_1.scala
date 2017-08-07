@@ -47,7 +47,7 @@ object SaveLabelFlow {
     
     //可以调整
     val sample_cards_ratio = 0.000002
-    val TF_ratio = 10
+    val TF_ratio = 100
     val fraudType = "62"
     
     

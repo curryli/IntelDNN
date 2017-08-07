@@ -46,7 +46,9 @@ object get_from_HDFS {
        else
          All_DF = All_DF.unionAll(tmp_DF)
     } 
-       All_DF
+       
+      All_DF =  All_DF.filter(All_DF("card_attr").=!=("01") )
+      All_DF
    }
     
   
@@ -176,15 +178,17 @@ object get_from_HDFS {
      
  
     
+ 
+   
    def get_indexed_DF(ss: SparkSession, input_dir: String):DataFrame = {
        val sc = ss.sparkContext
        
        val Row_RDD = sc.textFile(input_dir).map{str=>
            var tmparr = str.split(",")      
            
-           var tmpList = List(tmparr(0).toString()).:+(tmparr(1).toString).:+(tmparr(2).toDouble)//.:+(tmparr(3).toDouble).:+(tmparr(4).toDouble).:+(tmparr(5).toDouble)
+           var tmpList = List(tmparr(0).toString()).:+(tmparr(1).toDouble)//.:+(tmparr(2).toDouble)//.:+(tmparr(3).toDouble).:+(tmparr(4).toDouble).:+(tmparr(5).toDouble)
 
-           for(i<- 3 to tmparr.length-1){
+           for(i<- 2 to tmparr.length-1){
              tmpList = tmpList.:+(tmparr(i).toDouble)
            }   
            
@@ -194,5 +198,6 @@ object get_from_HDFS {
        var DF_schema_used = ss.createDataFrame(Row_RDD, constUtil.schema_labeled)
        DF_schema_used
     }
+   
          
 }
