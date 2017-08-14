@@ -46,14 +46,14 @@ object SaveLabelFlow {
     val usedArr_filled = IntelUtil.constUtil.usedArr.map{x => x + "_filled"}
     
     //可以调整
-    val sample_cards_ratio = 0.000002
-    val TF_ratio = 100
+    val sample_cards_ratio = 0.0001
+    val TF_ratio = 500
     val fraudType = "62"
     
     
     var fraudType_cards_num = 0L
     var normal_cards_num = 0L
-    var fraudType_related_fraud_count = 0L
+    var fraudType_fraud_count = 0L
      
  
   def main(args: Array[String]): Unit = {
@@ -83,7 +83,7 @@ object SaveLabelFlow {
     println("fraudType_cards count is " + fraudType_cards_num)
     println("step1 done in " + (System.currentTimeMillis()-startTime)/(1000*60) + " minutes." )
       
-    save_sample_cards_2(ss)
+    save_normal_cards_2(ss)
     println("step2 done in " + (System.currentTimeMillis()-startTime)/(1000*60) + " minutes." )
     
     save_Alldata_bycards_3(ss)
@@ -116,22 +116,40 @@ object SaveLabelFlow {
          
         var fraudType_fraud = fraudType_related.join(fraudType_infraud, fraudType_related("sys_tra_no")===fraudType_infraud("sys_tra_no"), "leftsemi")
         
+        var fraudType_unsure = fraudType_related.join(fraudType_infraud, fraudType_related("sys_tra_no").!==(fraudType_infraud("sys_tra_no")), "leftsemi")
+
+        
+        
         val fraudType_filled = fraudType_fraud.selectExpr(usedArr_filled:_*)
-        fraudType_related_fraud_count = fraudType_filled.count()
-        println("fraudType_related_fraud_data count is " + fraudType_related_fraud_count)
-         
+        fraudType_fraud_count = fraudType_filled.count()
+        println("fraudType_fraud count is " + fraudType_fraud_count)  
         fraudType_filled.rdd.map(_.mkString(",")).saveAsTextFile(rangedir + "fraudType_filled")
+        
+        
+        val fraud_unsure_filled = fraudType_unsure.selectExpr(usedArr_filled:_*)
+        println("fraud_unsure count is " + fraud_unsure_filled.count)  
+        fraud_unsure_filled.rdd.map(_.mkString(",")).saveAsTextFile(rangedir + "fraud_unsure_filled")
+         
     }
     
     
-    def save_sample_cards_2(ss: SparkSession, sample_ratio: Double = sample_cards_ratio): Unit ={
+    def save_normal_cards_2(ss: SparkSession, sample_ratio: Double = sample_cards_ratio): Unit ={
+        val sc = ss.sparkContext
+        val fraudType_cards= sc.textFile(rangedir + "fraudType_cards").collect   
+      
         var AllData = IntelUtil.get_from_HDFS.get_filled_DF(ss, startdate, enddate).repartition(1000) 
-        var tmp_ratio = fraudType_related_fraud_count.toDouble/80000000.toDouble
+        var tmp_ratio = fraudType_fraud_count.toDouble/80000000.toDouble
+        println("tmp_ratio count: ", tmp_ratio, "sample_ratio count: ", sample_ratio)
+        
         var Ratio =  tmp_ratio min sample_ratio
         
         val All_sample_cards = AllData.sample(false, Ratio, 0).select("pri_acct_no_conv").distinct()//.persist(StorageLevel.MEMORY_AND_DISK_SER) 
+        println("All_sample_cards count is " + All_sample_cards.count)  
         
-        All_sample_cards.rdd.map(r=>r.getString(0)).coalesce(1).saveAsTextFile(rangedir + "All_sample_cards")
+        val Norm_sample_cards = All_sample_cards.filter(!All_sample_cards("pri_acct_no_conv").isin(fraudType_cards:_*))
+        println("Norm_sample_cards count is " + Norm_sample_cards.count)  
+               
+        Norm_sample_cards.rdd.map(r=>r.getString(0)).coalesce(1).saveAsTextFile(rangedir + "Norm_sample_cards")
     }
     
     def save_Alldata_bycards_3(ss: SparkSession): Unit ={
@@ -140,15 +158,15 @@ object SaveLabelFlow {
         
         normal_cards_num = fraudType_cards_num * TF_ratio
                 
-        val sample_cards= sc.textFile(rangedir + "All_sample_cards").takeSample(false, normal_cards_num.toInt, 0)  
+        val sample_cards= sc.textFile(rangedir + "Norm_sample_cards").takeSample(false, normal_cards_num.toInt, 0)  
           
-        var all_cards_list = sample_cards.union(fraudType_cards)
+        var all_cards_list = sample_cards               //.union(fraudType_cards)  //套现要删掉
             
         var AllData = IntelUtil.get_from_HDFS.get_filled_DF(ss, startdate, enddate).repartition(1000) 
        
-        val Alldata_by_cards = AllData.filter(AllData("pri_acct_no_conv").isin(all_cards_list:_*))
-         
-        Alldata_by_cards.selectExpr(usedArr_filled:_*).rdd.map(_.mkString(",")).saveAsTextFile(rangedir + "Alldata_by_cards")
+        val Normdata_by_cards = AllData.filter(AllData("pri_acct_no_conv").isin(all_cards_list:_*))
+  
+        Normdata_by_cards.selectExpr(usedArr_filled:_*).rdd.map(_.mkString(",")).saveAsTextFile(rangedir + "Normdata_by_cards")
     }
     
     def save_labeled_new_4(ss: SparkSession): Unit ={
@@ -156,37 +174,41 @@ object SaveLabelFlow {
         val fraudType_cards= sc.textFile(rangedir + "fraudType_cards").cache
         val fraudType_cards_list = fraudType_cards.collect()
         
-        val sample_cards= sc.textFile(rangedir + "All_sample_cards").cache
-        val all_cards = sample_cards.union(fraudType_cards)
-        val all_cards_list = all_cards.collect()
+        val Norm_cards= sc.textFile(rangedir + "Norm_sample_cards").cache
        
-        var Alldata_by_cards_dir = rangedir + "Alldata_by_cards"
+        var Normdata_dir = rangedir + "Normdata_by_cards"
         var fraudType_dir = rangedir + "fraudType_filled"
-        var Alldata_by_cards_filled = IntelUtil.get_from_HDFS.get_processed_DF(ss, Alldata_by_cards_dir)
-        var fraudType_filled = IntelUtil.get_from_HDFS.get_processed_DF(ss, fraudType_dir)
+        var fraud_unsure_dir = rangedir + "fraud_unsure_filled"
         
- ///////////////////////////////////////////////////////过滤交易次数过多的账号////////////////////////////////////////////////       
-        val countdf = Alldata_by_cards_filled.groupBy("pri_acct_no_conv_filled").agg(count("trans_at_filled") as "counts") 
+        
+        var Normdata_filled = IntelUtil.get_from_HDFS.get_processed_DF(ss, Normdata_dir)
+        var fraudType_filled = IntelUtil.get_from_HDFS.get_processed_DF(ss, fraudType_dir)
+        var fraud_unsure_filled = IntelUtil.get_from_HDFS.get_processed_DF(ss, fraud_unsure_dir)
+        
+
+       
+        val udf_Map0 = udf[Double, String]{xstr => 0.0}
+        val udf_Map1 = udf[Double, String]{xstr => 1.0}
+        val udf_Map2 = udf[Double, String]{xstr => 2.0}
+         
+        var NormalData_labeled = Normdata_filled.withColumn("isFraud", udf_Map0(Normdata_filled("trans_md_filled")))
+        var fraudType_labeled = fraudType_filled.withColumn("isFraud", udf_Map1(fraudType_filled("trans_md_filled")))
+        var fraud_unsure_labeled = fraud_unsure_filled.withColumn("isFraud", udf_Map2(fraud_unsure_filled("trans_md_filled")))
+ 
+        
+        var LabeledData = fraudType_labeled.unionAll(NormalData_labeled).unionAll(fraud_unsure_labeled)
+        
+        
+///////////////////////////////////////////////////////过滤交易次数过多的账号////////////////////////////////////////////////       
+        val countdf = LabeledData.groupBy("pri_acct_no_conv_filled").agg(count("trans_at_filled") as "counts") 
         val filtered_cards = countdf.filter(countdf("counts")<1000)
         filtered_cards.show(5)
         println("filtered cards count is " + filtered_cards.count)
          
-        Alldata_by_cards_filled = Alldata_by_cards_filled.join(filtered_cards, Alldata_by_cards_filled("pri_acct_no_conv_filled")===filtered_cards("pri_acct_no_conv_filled"), "leftsemi")
-        println("Alldata_by_cards_filled count is " + Alldata_by_cards_filled.count) 
-        Alldata_by_cards_filled.show(5)
+        LabeledData = LabeledData.join(filtered_cards, LabeledData("pri_acct_no_conv_filled")===filtered_cards("pri_acct_no_conv_filled"), "leftsemi")
+        println("filtered LabeledData count is " + LabeledData.count) 
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////    
-      
-        var normaldata_filled = Alldata_by_cards_filled.except(fraudType_filled)
-          
-        var fraudType_related_all_data = Alldata_by_cards_filled.filter(Alldata_by_cards_filled("pri_acct_no_conv_filled").isin(fraudType_cards_list:_*))
-        println("normaldata_filled count is " + normaldata_filled.count) 
         
-        val udf_Map0 = udf[Double, String]{xstr => 0.0}
-        val udf_Map1 = udf[Double, String]{xstr => 1.0}
-         
-        var NormalData_labeled = normaldata_filled.withColumn("isFraud", udf_Map0(normaldata_filled("trans_md_filled")))
-        var fraudType_labeled = fraudType_filled.withColumn("isFraud", udf_Map1(fraudType_filled("trans_md_filled")))
-        var LabeledData = fraudType_labeled.unionAll(NormalData_labeled)
         
         LabeledData.rdd.map(_.mkString(",")).saveAsTextFile(rangedir + "Labeled_All")
     }
