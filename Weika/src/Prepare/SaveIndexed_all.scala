@@ -109,8 +109,7 @@ object SaveIndexed_all {
     
     println(labeledData.columns.mkString(","))
    
-    
-    
+     
     labeledData.selectExpr(labeled_arr:_*).rdd.map(_.mkString(",")).saveAsTextFile("xrli/IntelDNN/CashOut/models/idx_withlabel_del_0709")
 
     //labeledData.rdd.take(5).map(_.mkString(",")).foreach { println } 
