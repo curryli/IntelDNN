@@ -76,13 +76,20 @@ object Save_IndexerPipeLine {
 //    var Data_1101 = IntelUtil.get_from_HDFS.get_filled_DF(ss, "20161101", "20161101")//.persist(StorageLevel.MEMORY_AND_DISK_SER)// .cache         //.persist(StorageLevel.MEMORY_AND_DISK_SER)//
  
    // var AllData = Data_0701.unionAll(Data_0801).unionAll(Data_0901).unionAll(Data_1001).unionAll(Data_1101).repartition(15000).persist(StorageLevel.MEMORY_AND_DISK_SER)
-    var AllData = IntelUtil.get_from_HDFS.get_filled_DF(ss, "20161101", "20161101")//.persist(StorageLevel.MEMORY_AND_DISK_SER)// .cache         //.persist(StorageLevel.MEMORY_AND_DISK_SER)//
+    var AllData = IntelUtil.get_from_HDFS.get_filled_DF(ss, "20160701", "20160701")//.persist(StorageLevel.MEMORY_AND_DISK_SER)// .cache         //.persist(StorageLevel.MEMORY_AND_DISK_SER)//
   
     
     println("AllData done in " + (System.currentTimeMillis()-startTime)/(1000*60) + " minutes." )
      
     val pipeline_index = new Pipeline()
-    pipeline_index.setStages(IntelUtil.funUtil.getPipeline(IntelUtil.constUtil.DisperseArr).toArray)
+    
+    //filled
+    //pipeline_index.setStages(IntelUtil.funUtil.getPipeline(IntelUtil.constUtil.DisperseArr).toArray)
+    
+    
+    //原始变量
+    pipeline_index.setStages(IntelUtil.funUtil.idx_Pipeline(IntelUtil.constUtil.DisperseArr).toArray)
+
 
     println("start fitting data!")
     val index_Model = pipeline_index.fit(AllData)

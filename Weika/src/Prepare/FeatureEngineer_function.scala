@@ -133,10 +133,16 @@ object FeatureEngineer_function {
     labeledData = labeledData.withColumn("is_Night", is_Night(labeledData("hour")))
     
     
-    //println("交易是否需要密码  1需要    2不需要    需要的更容易被伪卡")
-    println("PW_need")
-    val PW_need = udf[Double, String]{xstr => xstr.reverse.substring(0,1).toDouble}   //最后一位
-    labeledData = labeledData.withColumn("PW_need", PW_need(labeledData("pos_entry_md_cd")))
+    //println("交易是否需要密码  1需要    2不需要  还有其他的不管了，认为不需要   需要的更容易被伪卡")
+    println("is_PW_need")
+    val is_PW_need = udf[Double, String]{xstr => 
+    var a = xstr.reverse.substring(0,1)  //最后一位
+    if(a=="1")
+      1.0
+    else
+      0.0
+    }   
+    labeledData = labeledData.withColumn("is_PW_need", is_PW_need(labeledData("pos_entry_md_cd")))
     
     //println("高危地区标识")
     println("is_highrisk_loc")

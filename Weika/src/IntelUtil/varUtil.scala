@@ -21,6 +21,6 @@ object varUtil {
   val enddate = "20160730"
   val rangeDir = "xrli/IntelDNN/Weika/201607/" 
   
-  val idx_model = "xrli/IntelDNN/Weika/models/index_Model"
+  val idx_model = "xrli/IntelDNN/Weika/models/index_Model_0701"
 			
 }

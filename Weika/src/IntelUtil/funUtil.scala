@@ -55,7 +55,7 @@ object funUtil {
     var i=0
     for (col <- DisperseArr) {
       i=i+1
-      println(i)
+      println(i, col + "_idx")
       pipelineStages += new StringIndexer()
         .setInputCol(col + "_filled")
         .setOutputCol(col + "_CatVec")
@@ -65,6 +65,21 @@ object funUtil {
     pipelineStages
   }
   
+  
+  def idx_Pipeline(DisperseArr: Array[String]): ArrayBuffer[PipelineStage] = {
+    val pipelineStages = new ArrayBuffer[PipelineStage]
+    var i=0
+    for (col <- DisperseArr) {
+      i=i+1
+      println(i, col + "_idx")
+      pipelineStages += new StringIndexer()
+        .setInputCol(col)
+        .setOutputCol(col + "_idx")
+        .setHandleInvalid("skip")
+    }
+    
+    pipelineStages
+  } 
   
  def dayForWeek(pTime: String): Int={  
      //val format = new SimpleDateFormat("yyyy-MM-dd")
