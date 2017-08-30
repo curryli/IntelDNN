@@ -177,6 +177,24 @@ object get_from_HDFS {
     }     
      
  
+   def get_Labeled_All(ss: SparkSession, input_dir: String):DataFrame = {
+       val sc = ss.sparkContext
+       
+       val Row_RDD = sc.textFile(input_dir).map{str=>
+           var tmparr = str.split(",")
+          //.:+ 是添加在尾部，  .+:是添加在头部
+           var tmpList = List(tmparr(0).toString()) 
+           for(i<- 1 to tmparr.length-1){
+             tmpList = tmpList.:+(tmparr(i).toString())
+           }
+             
+           Row.fromSeq(tmpList.toSeq)
+       }
+       println("get_Labeled_All: Row_RDD done.")
+       var DF_schema_labeled = ss.createDataFrame(Row_RDD, funUtil.get_schema(constUtil.Labeled_All_Arr))
+       DF_schema_labeled
+    }     
+    
     
  
    

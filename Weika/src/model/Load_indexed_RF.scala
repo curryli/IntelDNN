@@ -99,10 +99,15 @@ object Load_indexed_RF {
     val rfClassifier = new RandomForestClassifier()
         .setLabelCol("label_idx")
         .setFeaturesCol("featureVector")
-        .setNumTrees(200)
+        .setSubsamplingRate(0.2)
+        .setFeatureSubsetStrategy("auto")
+        .setImpurity("gini")
+        .setNumTrees(100)
+        .setMaxDepth(10)
+//        .setNumTrees(200)
         .setMaxBins(10000)
         .setMinInstancesPerNode(2)
-      //  .setThresholds(Array(10,1))
+        .setThresholds(Array(100,1))
         //为每个分类设置一个阈值，参数的长度必须和类的个数相等。最终的分类结果会是p/t最大的那个分类，其中p是通过Bayes计算出来的结果，t是阈值。 
         //这对于训练样本严重不均衡的情况尤其重要，比如分类0有200万数据，而分类1有2万数据，此时应用new NaiveBayes().setThresholds(Array(100.0,1.0))    这里t1=100  t2=1
      

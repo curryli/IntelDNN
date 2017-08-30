@@ -76,9 +76,18 @@ object FeatureEngineer_function {
   def FE_function(ss: SparkSession, inputData: DataFrame):DataFrame = {
     //  获取月+日     817214312  817    1117214312  1117 
     var labeledData = inputData
-    val getdate = udf[Long, String]{xstr => xstr.reverse.substring(6).reverse.toLong}
+    //val getdate = udf[Long, String]{xstr => xstr.reverse.substring(6).reverse.toLong}
+    val getdate = udf[Long, String]{xstr => xstr.substring(0,4).toLong}
     labeledData = labeledData.withColumn("date", getdate(labeledData("tfr_dt_tm")))
  
+    
+    val get_day_week = udf[Int, String]{xstr => IntelUtil.funUtil.dayForWeek("2016" + xstr.substring(0,4)).toInt}
+    labeledData = labeledData.withColumn("day_week", get_day_week(labeledData("tfr_dt_tm")))
+           
+    val get_hour = udf[Int, String]{xstr => xstr.substring(4,6).toInt }
+    labeledData = labeledData.withColumn("hour", get_hour(labeledData("tfr_dt_tm")))
+    
+     
     //获取交易金额 （元）
     println("RMB")
     val getRMB = udf[Long, String]{xstr => (xstr.toDouble/100).toLong}
@@ -190,29 +199,41 @@ object FeatureEngineer_function {
     
      
     //统计该卡当日交易地区总数。
-     val cur_tot_locs_DF = labeledData.groupBy("pri_acct_no_conv","date").agg(countDistinct("acpt_ins_id_cd_RG") as "cur_tot_locs") 
+    val cur_tot_locs_DF = labeledData.groupBy("pri_acct_no_conv","date").agg(countDistinct("acpt_ins_id_cd_RG") as "cur_tot_locs") 
     labeledData = labeledData.join(cur_tot_locs_DF, (labeledData("pri_acct_no_conv")===cur_tot_locs_DF("pri_acct_no_conv") &&  labeledData("date")===cur_tot_locs_DF("date")), "left_outer").drop(labeledData("pri_acct_no_conv")).drop(labeledData("date"))
  
     //统计该卡当日交易省数。 countDistinct 不能再窗口函数里用，所以只能这样做
     val getProvince = udf[String, String]{xstr => xstr.substring(0,2)}
-     val cur_tot_provs_DF = labeledData.groupBy("pri_acct_no_conv","date").agg(countDistinct(getProvince(labeledData("acpt_ins_id_cd_RG"))) as "cur_tot_provs") 
+    val cur_tot_provs_DF = labeledData.groupBy("pri_acct_no_conv","date").agg(countDistinct(getProvince(labeledData("acpt_ins_id_cd_RG"))) as "cur_tot_provs") 
     labeledData = labeledData.join(cur_tot_provs_DF, (labeledData("pri_acct_no_conv")===cur_tot_provs_DF("pri_acct_no_conv") &&  labeledData("date")===cur_tot_provs_DF("date")), "left_outer").drop(labeledData("pri_acct_no_conv")).drop(labeledData("date"))
 
 
       //统计该卡历史交易地区总数。
-     val tot_locs_DF = labeledData.groupBy("pri_acct_no_conv").agg(countDistinct("acpt_ins_id_cd_RG") as "tot_locs") 
+    val tot_locs_DF = labeledData.groupBy("pri_acct_no_conv").agg(countDistinct("acpt_ins_id_cd_RG") as "tot_locs") 
     labeledData = labeledData.join(tot_locs_DF, labeledData("pri_acct_no_conv")===tot_locs_DF("pri_acct_no_conv"), "left_outer").drop(labeledData("pri_acct_no_conv"))
  
     //统计该卡历史交易省数。 countDistinct 不能再窗口函数里用，所以只能这样做 
-     val tot_provs_DF = labeledData.groupBy("pri_acct_no_conv").agg(countDistinct(getProvince(labeledData("acpt_ins_id_cd_RG"))) as "tot_provs") 
+    val tot_provs_DF = labeledData.groupBy("pri_acct_no_conv").agg(countDistinct(getProvince(labeledData("acpt_ins_id_cd_RG"))) as "tot_provs") 
     labeledData = labeledData.join(tot_provs_DF, labeledData("pri_acct_no_conv")===tot_provs_DF("pri_acct_no_conv"), "left_outer").drop(labeledData("pri_acct_no_conv"))
 
-
+    labeledData.registerTempTable("labeledData_TB")
+    //统计卡最常用交易地区
+    val most_frequent_locs_DF = ss.sql("SELECT pri_acct_no_conv, FIRST(acpt_ins_id_cd_RG) AS mlocs, MAX(cnt) AS mcnt_locs from (SELECT pri_acct_no_conv, acpt_ins_id_cd_RG, count(*) as cnt FROM labeledData_TB GROUP BY pri_acct_no_conv, acpt_ins_id_cd_RG)tmp GROUP BY pri_acct_no_conv")
+   
+    //统计卡最常用交易省
+    val most_frequent_provs_DF = ss.sql("SELECT pri_acct_no_conv, FIRST(prov) AS mprovs, MAX(cnt) AS mcnt_provs from (SELECT pri_acct_no_conv, substring(acpt_ins_id_cd_RG,0,2) as prov, count(*) as cnt FROM labeledData_TB GROUP BY pri_acct_no_conv, substring(acpt_ins_id_cd_RG,0,2))tmp GROUP BY pri_acct_no_conv")
+   
+    labeledData = labeledData.join(most_frequent_locs_DF, labeledData("pri_acct_no_conv")===most_frequent_locs_DF("pri_acct_no_conv"), "left_outer").drop(labeledData("pri_acct_no_conv"))
+    labeledData = labeledData.join(most_frequent_provs_DF, labeledData("pri_acct_no_conv")===most_frequent_provs_DF("pri_acct_no_conv"), "left_outer").drop(labeledData("pri_acct_no_conv"))
+ 
+    //是否在最常用交易地区
+    labeledData = labeledData.withColumn("is_frequent_locs", udf_bool_to_double(labeledData("acpt_ins_id_cd_RG")===labeledData("mlocs")))
+    //是否在最常用交易省
+    labeledData = labeledData.withColumn("is_frequent_provs", udf_bool_to_double(getProvince(labeledData("acpt_ins_id_cd_RG"))===labeledData("mprovs")))
     
-    
-    
-    
-    
+    //该卡常用交易地区是否在高危列表
+    labeledData = labeledData.withColumn("is_freq_loc_highrisk", is_highrisk_loc(labeledData("mlocs")))
+    labeledData = labeledData.drop("mlocs").drop("mprovs")//.drop("mcnt_locs").drop("mcnt_provs")
     
     
     println("*******************************delta*********************************")
@@ -320,16 +341,7 @@ object FeatureEngineer_function {
     //println("统计前3日（不包括当日）交易")
     println("********************************3 days stat********************************")
     val W_day3 = wd.rangeBetween(-3, -1)  //累加前3天,当日除外
-    
-//    val wd_rg = Window.partitionBy("pri_acct_no_conv", "acpt_ins_id_cd_RG").orderBy("date")
-//    val W_rg_day3 = wd_rg.rangeBetween(-3, 0)  //累加前3天,当日除外
-//    labeledData = labeledData.withColumn("day3_rank", count("trans_at").over(W_rg_day3))
-//    labeledData.select("pri_acct_no_conv", "acpt_ins_id_cd_RG","date", "day3_rank").show(1000)
-//    
-    
-    
-    
-    
+ 
     labeledData = labeledData.withColumn("day3_tot_amt", sum("trans_at").over(W_day3))
     labeledData = labeledData.withColumn("day3_tot_cnt", count("trans_at").over(W_day3)) //3日交易总次数
     labeledData = labeledData.withColumn("day3_max_amt", max("trans_at").over(W_day3)) //3日最大交易金额
@@ -369,6 +381,20 @@ object FeatureEngineer_function {
     
     //统计该卡前3日上下笔平均间隔时间在5分钟内的次数
     labeledData = labeledData.withColumn("day3_freq_cnt", sum(when(labeledData("quant_interval_1")<3, 1).otherwise(0)).over(W_day3))
+     
+    //前三天该卡消费的不同term数
+    //ss.sql("select pri_acct_no_conv, count(distinct term_id_select) as term_cnt from (SELECT pri_acct_no_conv, first(term_id) over(partition by pri_acct_no_conv,term_id order by date range between 3 preceding and 1 preceding) as term_id_select from labeledData_TB)tmp group by pri_acct_no_conv").show  
+  
+     
+    ///统计该卡前3日不同的交易地点总数    
+    
+    val w_card_loc = Window.partitionBy("pri_acct_no_conv","acpt_ins_id_cd_RG").orderBy("date")
+    
+    val W_card_loc_day3 = w_card_loc.rangeBetween(-3, -1)  //累加前3天,当日除外
+    
+    var card_loc_day3 = labeledData.select(labeledData("pri_acct_no_conv"),first("acpt_ins_id_cd_RG").over(W_card_loc_day3)).toDF("pri_acct_no_conv","loc_day3_select")
+    var loc_cnt_day3 = card_loc_day3.groupBy("pri_acct_no_conv").agg(countDistinct("loc_day3_select") as "loc_day3_cnt")
+    labeledData = labeledData.join(loc_cnt_day3, labeledData("pri_acct_no_conv")===loc_cnt_day3("pri_acct_no_conv"), "left_outer").drop(labeledData("pri_acct_no_conv"))
     
     
       
@@ -416,6 +442,12 @@ object FeatureEngineer_function {
     //统计该卡前7日上下笔平均间隔时间在5分钟内的次数
     labeledData = labeledData.withColumn("day7_freq_cnt", sum(when(labeledData("quant_interval_1")<3, 1).otherwise(0)).over(W_day7))
     
+     ///统计该卡前7日不同的交易地点总数    
+    val W_card_loc_day7 = w_card_loc.rangeBetween(-7, -1)  //累加前7天,当日除外
+    var card_loc_day7 = labeledData.select(labeledData("pri_acct_no_conv"),first("acpt_ins_id_cd_RG").over(W_card_loc_day7)).toDF("pri_acct_no_conv","loc_day7_select")
+    var loc_cnt_day7 = card_loc_day7.groupBy("pri_acct_no_conv").agg(countDistinct("loc_day7_select") as "loc_day7_cnt")
+    labeledData = labeledData.join(loc_cnt_day7, labeledData("pri_acct_no_conv")===loc_cnt_day7("pri_acct_no_conv"), "left_outer").drop(labeledData("pri_acct_no_conv"))
+    
     
         //println("统计前30日（不包括当日）内交易")
     println("*******************************30 days stat*********************************")
@@ -461,6 +493,11 @@ object FeatureEngineer_function {
     //统计该卡前30日上下笔平均间隔时间在5分钟内的次数
     labeledData = labeledData.withColumn("day30_freq_cnt", sum(when(labeledData("quant_interval_1")<3, 1).otherwise(0)).over(W_day30))
     
+     ///统计该卡前30日不同的交易地点总数    
+    val W_card_loc_day30 = w_card_loc.rangeBetween(-30, -1)  //累加前30天,当日除外
+    var card_loc_day30 = labeledData.select(labeledData("pri_acct_no_conv"),first("acpt_ins_id_cd_RG").over(W_card_loc_day30)).toDF("pri_acct_no_conv","loc_day30_select")
+    var loc_cnt_day30 = card_loc_day30.groupBy("pri_acct_no_conv").agg(countDistinct("loc_day30_select") as "loc_day30_cnt")
+    labeledData = labeledData.join(loc_cnt_day30, labeledData("pri_acct_no_conv")===loc_cnt_day30("pri_acct_no_conv"), "left_outer").drop(labeledData("pri_acct_no_conv"))
     
     
     
@@ -619,15 +656,24 @@ object FeatureEngineer_function {
     
     
     
+/////////////////// 等新提取好数据要加上去///////////////////
     
-    
-//    /////////////////// 等新提取好数据要加上去///////////////////
+    /////////////////////Join FraudStatTable//////////////////////////
+//    //党比交易的POS机前期发生欺诈的次数统计
+//    val fraud_stat_term = get_FraudStat_term(ss)
+//    labeledData = labeledData.join(fraud_stat_term, (labeledData("term_id")===fraud_stat_term("term_id") &&  labeledData("date")===fraud_stat_term("date")), "left_outer").drop(labeledData("term_id")).drop(labeledData("date"))
+//
+//    //党比交易的商户前期发生欺诈的次数统计
+//    val fraud_stat_mchnt = get_FraudStat_mchnt(ss)
+//    labeledData = labeledData.join(fraud_stat_mchnt, (labeledData("mchnt_cd")===fraud_stat_mchnt("mchnt_cd") &&  labeledData("date")===fraud_stat_mchnt("date")), "left_outer").drop(labeledData("mchnt_cd")).drop(labeledData("date"))
+//
+// 
 //    //println("高危MCC标识") 
 //    println("is_highrisk_MCC")
 //    val is_highrisk_MC = udf[String, String]{xstr => any_to_double(IntelUtil.constUtil.Risk_mchnt_cd_List.contains(xstr))}    
 //    labeledData = labeledData.withColumn("is_highrisk_MC", is_highrisk_MC(labeledData("mchnt_cd")))
 //    
-//         //统计该笔交易与该卡上比交易是否同一商户 
+//    //统计该笔交易与该卡上比交易是否同一商户 
 //      labeledData = labeledData.withColumn("is_MC_changed",labeledData("mchnt_cd").===(functions.lag("mchnt_cd", 1).over(wt))) 
 //    //println("交易金额与清算金额是否相等")
 //    labeledData = labeledData.withColumn("is_spec_airc", udf_bool_to_double(labeledData("trans_at")===labeledData("rcv_settle_at")))
@@ -647,8 +693,33 @@ object FeatureEngineer_function {
       
     labeledData
   }
+ 
+ //sys_tra_no,tfr_dt_tm,pri_acct_no_conv,term_id,trans_region,mchnt_cd,fraud_tp,date,day3_fcnt_term,day7_fcnt_term,day30_fcnt_term,day3_fcnt_mchnt,day7_fcnt_mchnt,day30_fcnt_mchnt
+      def get_FraudStat_term(ss: SparkSession, filename:String = "xrli/IntelDNN/Weika/weika_term_mchnt_stat"):DataFrame = {
+    		val sc = ss.sparkContext
+    	  val filename = "xrli/IntelDNN/Weika/weika_term_mchnt_stat"
+		    val fraud_stat_Rdd = sc.textFile(filename).map(str=> str.split(",")).map{ tmparr=>(tmparr(3),tmparr(7),tmparr(8),tmparr(9),tmparr(10))
+			    Row.fromSeq(tmparr.toSeq)
+    		}
+    		val schema = StructType(StructField("term_id",StringType,true)::StructField("date",StringType,true)::StructField("day3_fcnt_term",StringType,true)::StructField("day7_fcnt_term",StringType,true)::StructField("day30_fcnt_term",StringType,true)::Nil)
+		    var fraud_stat_DF = ss.createDataFrame(fraud_stat_Rdd, schema) 
+			  fraud_stat_DF
+     }
+      
+      
+       def get_FraudStat_mchnt(ss: SparkSession, filename:String = "xrli/IntelDNN/Weika/weika_term_mchnt_stat"):DataFrame = {
+    		val sc = ss.sparkContext
+    	  val filename = "xrli/IntelDNN/Weika/weika_term_mchnt_stat"
+		    val fraud_stat_Rdd = sc.textFile(filename).map(str=> str.split(",")).map{ tmparr=>(tmparr(5),tmparr(7),tmparr(11),tmparr(12),tmparr(13))
+			    Row.fromSeq(tmparr.toSeq)
+    		}
+    		val schema = StructType(StructField("mchnt_cd",StringType,true)::StructField("date",StringType,true)::StructField("day3_fcnt_mchnt",StringType,true)::StructField("day7_fcnt_mchnt",StringType,true)::StructField("day30_fcnt_mchnt",StringType,true)::Nil)
+		    var fraud_stat_DF = ss.createDataFrame(fraud_stat_Rdd, schema) 
+			  fraud_stat_DF
+     }
+       
+       
+		    
   
-  
-
     
 }
