@@ -659,34 +659,34 @@ object FeatureEngineer_function {
 /////////////////// 等新提取好数据要加上去///////////////////
     
     /////////////////////Join FraudStatTable//////////////////////////
-//    //党比交易的POS机前期发生欺诈的次数统计
-//    val fraud_stat_term = get_FraudStat_term(ss)
-//    labeledData = labeledData.join(fraud_stat_term, (labeledData("term_id")===fraud_stat_term("term_id") &&  labeledData("date")===fraud_stat_term("date")), "left_outer").drop(labeledData("term_id")).drop(labeledData("date"))
-//
-//    //党比交易的商户前期发生欺诈的次数统计
-//    val fraud_stat_mchnt = get_FraudStat_mchnt(ss)
-//    labeledData = labeledData.join(fraud_stat_mchnt, (labeledData("mchnt_cd")===fraud_stat_mchnt("mchnt_cd") &&  labeledData("date")===fraud_stat_mchnt("date")), "left_outer").drop(labeledData("mchnt_cd")).drop(labeledData("date"))
-//
-// 
-//    //println("高危MCC标识") 
-//    println("is_highrisk_MCC")
-//    val is_highrisk_MC = udf[String, String]{xstr => any_to_double(IntelUtil.constUtil.Risk_mchnt_cd_List.contains(xstr))}    
-//    labeledData = labeledData.withColumn("is_highrisk_MC", is_highrisk_MC(labeledData("mchnt_cd")))
-//    
-//    //统计该笔交易与该卡上比交易是否同一商户 
-//      labeledData = labeledData.withColumn("is_MC_changed",labeledData("mchnt_cd").===(functions.lag("mchnt_cd", 1).over(wt))) 
-//    //println("交易金额与清算金额是否相等")
-//    labeledData = labeledData.withColumn("is_spec_airc", udf_bool_to_double(labeledData("trans_at")===labeledData("rcv_settle_at")))
-//    
-//    //println("无授权应答码")
-//    println("no_auth_id_resp_cd")
-//    val no_auth_id_resp_cd = udf[String, String]{xstr => any_to_double(xstr=="N")}    
-//    labeledData = labeledData.withColumn("no_auth_id_resp_cd", no_auth_id_resp_cd(labeledData("auth_id_resp_cd")))
-//     
-//    //println("特殊授权应答码")
-//    println("is_spec_airc")
-//    val is_spec_airc = udf[String, String]{xstr => any_to_double(xstr=="Y012345")}    
-//    labeledData = labeledData.withColumn("is_spec_airc", is_spec_airc(labeledData("auth_id_resp_cd")))
+    //党比交易的POS机前期发生欺诈的次数统计
+    val fraud_stat_term = get_FraudStat_term(ss)
+    labeledData = labeledData.join(fraud_stat_term, (labeledData("term_id")===fraud_stat_term("term_id") &&  labeledData("date")===fraud_stat_term("date")), "left_outer").drop(labeledData("term_id")).drop(labeledData("date"))
+
+    //党比交易的商户前期发生欺诈的次数统计
+    val fraud_stat_mchnt = get_FraudStat_mchnt(ss)
+    labeledData = labeledData.join(fraud_stat_mchnt, (labeledData("mchnt_cd")===fraud_stat_mchnt("mchnt_cd") &&  labeledData("date")===fraud_stat_mchnt("date")), "left_outer").drop(labeledData("mchnt_cd")).drop(labeledData("date"))
+
+ 
+    //println("高危MCC标识") 
+    println("is_highrisk_MCC")
+    val is_highrisk_MC = udf[Double, String]{xstr => any_to_double(IntelUtil.constUtil.Risk_mchnt_cd_List.contains(xstr))}    
+    labeledData = labeledData.withColumn("is_highrisk_MC", is_highrisk_MC(labeledData("mchnt_cd")))
+    
+    //统计该笔交易与该卡上比交易是否同一商户 
+      labeledData = labeledData.withColumn("is_MC_changed",labeledData("mchnt_cd").===(functions.lag("mchnt_cd", 1).over(wt))) 
+    //println("交易金额与清算金额是否相等")
+    labeledData = labeledData.withColumn("is_spec_airc", udf_bool_to_double(labeledData("trans_at")===labeledData("rcv_settle_at")))
+    
+    //println("无授权应答码")
+    println("no_auth_id_resp_cd")
+    val no_auth_id_resp_cd = udf[Double, String]{xstr => any_to_double(xstr=="N")}    
+    labeledData = labeledData.withColumn("no_auth_id_resp_cd", no_auth_id_resp_cd(labeledData("auth_id_resp_cd")))
+     
+    //println("特殊授权应答码")
+    println("is_spec_airc")
+    val is_spec_airc = udf[Double, String]{xstr => any_to_double(xstr=="Y012345")}    
+    labeledData = labeledData.withColumn("is_spec_airc", is_spec_airc(labeledData("auth_id_resp_cd")))
      
  
     println(labeledData.columns.mkString(",")) 
