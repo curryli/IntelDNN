@@ -54,7 +54,7 @@ object Expand_Indexed_RF {
     //屏蔽日志
     Logger.getLogger("org").setLevel(Level.ERROR);
     Logger.getLogger("akka").setLevel(Level.ERROR);
-    Logger.getLogger("hive").setLevel(Level.WARN);
+    Logger.getLogger("hive").setLevel(Level.ERROR);
     Logger.getLogger("parse").setLevel(Level.ERROR); 
     
     //val sparkConf = new SparkConf().setAppName("spark2SQL")
@@ -77,7 +77,8 @@ object Expand_Indexed_RF {
     var labeledData = IntelUtil.get_from_HDFS.get_Labeled_All(ss, input_dir)// .cache         //.persist(StorageLevel.MEMORY_AND_DISK_SER)//
     labeledData.show(5)
  
-    //labeledData = labeledData.sample(false, 0.0001)
+    labeledData = labeledData.sample(false, 0.00001).cache
+    
     
     println("testData done in " + (System.currentTimeMillis()-startTime)/(1000*60) + " minutes." )
       
@@ -93,12 +94,7 @@ object Expand_Indexed_RF {
     val CatVecArr = Arr_to_idx.map { x => x + "_idx"}
     //CatVecArr.foreach {println }
      
-    
-//    val pipeline_idx = new Pipeline().setStages(IntelUtil.funUtil.Multi_idx_Pipeline(Arr_to_idx).toArray)
-//
-//    labeledData = pipeline_idx.fit(labeledData).transform(labeledData)
-//    println("idx done in " + (System.currentTimeMillis()-startTime)/(1000*60) + " minutes." )    
-//    labeledData.show(5)
+ 
     
     val my_index_Model = PipelineModel.load(idx_modelname)
    
@@ -139,7 +135,7 @@ object Expand_Indexed_RF {
     labeledData = labeledData.selectExpr(db_list:_*).persist(StorageLevel.MEMORY_AND_DISK_SER)
     labeledData.show()
     
-    labeledData.rdd.map(_.mkString(",")).saveAsTextFile(rangedir + "FE_db")
+    labeledData.rdd.map(_.mkString(",")).saveAsTextFile(rangedir + "FE_db_test")
     println("Saved FE_db done:   ",labeledData.columns.mkString(","))
      
     
