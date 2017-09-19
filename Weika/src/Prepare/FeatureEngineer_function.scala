@@ -80,10 +80,10 @@ object FeatureEngineer_function {
     var labeledData = inputData
     //val getdate = udf[Long, String]{xstr => xstr.reverse.substring(6).reverse.toLong}
     
+    labeledData = labeledData.sort("pri_acct_no_conv")
+    
     labeledData = labeledData.withColumn("date", getdate(labeledData("tfr_dt_tm")))
- 
-    
-    
+   
     labeledData = labeledData.withColumn("day_week", get_day_week(labeledData("tfr_dt_tm")))
            
     val get_hour = udf[Int, String]{xstr => xstr.substring(4,6).toInt }
@@ -126,7 +126,7 @@ object FeatureEngineer_function {
     println("is_large_integer")
     val is_large_integer = udf[Double, Long]{a =>
       val b = a.toString.size
-      val c = a.toDouble/(10*math.exp(b-1))
+      val c = a.toDouble/(math.pow(10, (b-1)))
       val d = math.abs(c-math.round(c))
       val e = d.toDouble/b.toDouble
       any_to_double(e<0.01 && a>1000)
@@ -202,13 +202,13 @@ object FeatureEngineer_function {
      
     //统计该卡当日交易地区总数。
     var cur_tot_locs_DF = labeledData.groupBy("pri_acct_no_conv","date").agg(countDistinct("acpt_ins_id_cd_RG") as "cur_tot_locs") 
-    cur_tot_locs_DF.show(5)
+    cur_tot_locs_DF.show(50)
     cur_tot_locs_DF = cur_tot_locs_DF.select(cur_tot_locs_DF("pri_acct_no_conv").as("card"), cur_tot_locs_DF("date").as("pdate"), cur_tot_locs_DF("cur_tot_locs"))
-    cur_tot_locs_DF.show(5)
+    cur_tot_locs_DF.show(50)
     
     labeledData = labeledData.join(cur_tot_locs_DF, (labeledData("pri_acct_no_conv")===cur_tot_locs_DF("card") &&  labeledData("date")===cur_tot_locs_DF("pdate")), "left_outer").drop("pdate").drop("card")
  
-    labeledData.show(5)
+    labeledData.show(50)
     
     //统计该卡当日交易省数。 countDistinct 不能再窗口函数里用，所以只能这样做
     val getProvince = udf[String, String]{xstr => xstr.substring(0,2)}
@@ -218,7 +218,7 @@ object FeatureEngineer_function {
     
     labeledData = labeledData.join(cur_tot_provs_DF, (labeledData("pri_acct_no_conv")===cur_tot_provs_DF("card") &&  labeledData("date")===cur_tot_provs_DF("pdate")), "left_outer").drop("card").drop("pdate")
 
-    labeledData.show(5)
+    labeledData.show(50)
 
       //统计该卡历史交易地区总数。
     var tot_locs_DF = labeledData.groupBy("pri_acct_no_conv").agg(countDistinct("acpt_ins_id_cd_RG") as "tot_locs") 
@@ -253,7 +253,7 @@ object FeatureEngineer_function {
     labeledData = labeledData.drop("mlocs").drop("mprovs")//.drop("mcnt_locs").drop("mcnt_provs")
     
     println("a")
-    labeledData.show(5)
+    labeledData.show(50)
     println("*******************************delta*********************************")
     val wt = Window.partitionBy("pri_acct_no_conv").orderBy("tfr_dt_tm")
     
@@ -312,7 +312,7 @@ object FeatureEngineer_function {
     labeledData = labeledData.withColumn("is_loc_changed", udf_bool_to_double(labeledData("acpt_ins_id_cd_RG").===(functions.lag("acpt_ins_id_cd_RG", 1).over(wt)))) 
  
     println("b")
-    labeledData.show(5)
+    labeledData.show(50)
     //rows表示 行，就是前n行，后n行
     //range表示的是 具体的值，比这个值小n的行，比这个值大n的行   要用rangeBetween，orderBy( )里面的列必须是数值型的
     //println("统计当天交易")
@@ -356,7 +356,7 @@ object FeatureEngineer_function {
     labeledData = labeledData.withColumn("cur_freq_cnt", sum(when(labeledData("quant_interval_1")<3, 1).otherwise(0)).over(W_cur))
      
      println("c")
-    labeledData.show(5)
+    labeledData.show(50)
     
     //println("统计前3日（不包括当日）交易")
     println("********************************3 days stat********************************")
@@ -472,7 +472,7 @@ object FeatureEngineer_function {
     labeledData = labeledData.join(loc_cnt_day7, labeledData("pri_acct_no_conv")===loc_cnt_day7("card"), "left_outer").drop("card")
     
     println("d")
-    labeledData.show(5)
+    labeledData.show(50)
         //println("统计前30日（不包括当日）内交易")
     println("*******************************30 days stat*********************************")
     val W_day30 = wd.rangeBetween(-30, -1)  //累加前30天,当日除外
@@ -525,7 +525,7 @@ object FeatureEngineer_function {
     labeledData = labeledData.join(loc_cnt_day30, labeledData("pri_acct_no_conv")===loc_cnt_day30("card"), "left_outer").drop("card")
     
     println("e")
-    labeledData.show(5)
+    labeledData.show(50)
     
         //println("统计除当日外历史所有（不包括当日）内交易")
     println("*******************************all history stat*********************************")
@@ -574,7 +574,7 @@ object FeatureEngineer_function {
     
     
     println("f")
-    labeledData.show(5)
+    labeledData.show(50)
     
     //短时高频
     println("*******************************frequent in short time*********************************")
@@ -682,7 +682,7 @@ object FeatureEngineer_function {
     labeledData = labeledData.withColumn("min120_cross_dist_cnt", sum(when(labeledData("cross_dist_in").===("cross_dist_in"), 1).otherwise(0)).over(W_min120))
     
     println("g")
-    labeledData.show(5)
+    labeledData.show(50)
     
 /////////////////// 等新提取好数据要加上去///////////////////
     
@@ -692,14 +692,14 @@ object FeatureEngineer_function {
     println("fraud_stat_term")
     fraud_stat_term = fraud_stat_term.withColumn("pdate", getdate(fraud_stat_term("tfr_dt_tm"))).drop("tfr_dt_tm")
     
-    fraud_stat_term.show(5)
+    fraud_stat_term.show(50)
     labeledData = labeledData.join(fraud_stat_term, (labeledData("term_id")===fraud_stat_term("term_id_fraud") &&  labeledData("date")===fraud_stat_term("pdate")), "left_outer").drop(fraud_stat_term("term_id_fraud")).drop(fraud_stat_term("pdate"))
 
     //党比交易的商户前期发生欺诈的次数统计
     var fraud_stat_mchnt = get_FraudStat_mchnt(ss)
     println("fraud_stat_mchnt")
     fraud_stat_mchnt = fraud_stat_mchnt.withColumn("pdate", getdate(fraud_stat_mchnt("tfr_dt_tm"))).drop("tfr_dt_tm")
-    fraud_stat_mchnt.show(5)
+    fraud_stat_mchnt.show(50)
     labeledData = labeledData.join(fraud_stat_mchnt, (labeledData("mchnt_cd")===fraud_stat_mchnt("mchnt_cd_fraud") &&  labeledData("date")===fraud_stat_mchnt("pdate")), "left_outer").drop(fraud_stat_mchnt("mchnt_cd_fraud")).drop(fraud_stat_mchnt("pdate"))
 
  
@@ -724,7 +724,7 @@ object FeatureEngineer_function {
     labeledData = labeledData.withColumn("is_spec_airc", is_spec_airc(labeledData("auth_id_resp_cd")))
      
     println("h")
-    labeledData.show(5)
+    labeledData.show(50)
     println(labeledData.columns.mkString(",")) 
       
     labeledData
