@@ -83,6 +83,8 @@ object Expand_Indexed_RF {
     println("testData done in " + (System.currentTimeMillis()-startTime)/(1000*60) + " minutes." )
       
     labeledData = Prepare.FeatureEngineer_function.FE_function(ss, labeledData)
+    
+    labeledData = labeledData.sort("pri_acct_no_conv")
     labeledData.show(50)
     
     var All_cols =  labeledData.columns
@@ -135,64 +137,64 @@ object Expand_Indexed_RF {
     labeledData = labeledData.selectExpr(db_list:_*).persist(StorageLevel.MEMORY_AND_DISK_SER)
     labeledData.show()
     
-    labeledData.rdd.map(_.mkString(",")).saveAsTextFile(rangedir + "FE_db_1")
+    labeledData.rdd.map(_.mkString(",")).saveAsTextFile(rangedir + "FE_db_0919")
     println("Saved FE_db done:   ",labeledData.columns.mkString(","))
      
-//    
-//        //保存带文件头
-//    var savepath = rangedir + "FE_db_csv"
-//    //val saveOptions = Map("header" -> "true", "path" -> savepath)
-//    val saveOptions = Map("header" -> "false", "path" -> savepath)
-//    labeledData.write.format("com.databricks.spark.csv").mode(SaveMode.Overwrite).options(saveOptions).save()
-//    
-//    
-//    
-//    
-//    val assembler = new VectorAssembler()
-//      .setInputCols(db_list.slice(2, db_list.length).toArray)
-//      .setOutputCol("featureVector")
-// 
-//     
-////        val normalizer = new Normalizer().setInputCol("features_Cat").setOutputCol("normFeatures")     //默认是L2
-////    val l2NormData = normalizer.transform(labeledData)
-////    println("Normalize dataframe")
-////    l2NormData.show(10)
-//    
-//    
-//    val label_indexer = new StringIndexer()
-//     .setInputCol("label")
-//     .setOutputCol("label_idx")
-//     .fit(labeledData)  
-//       
-//      
-//    val rfClassifier = new RandomForestClassifier()
-//        .setLabelCol("label_idx")
-//        .setFeaturesCol("featureVector")
-//        .setNumTrees(200)
-//        .setMaxBins(10000)
-//        .setMinInstancesPerNode(10)
-//        .setThresholds(Array(100,1))
-//        //为每个分类设置一个阈值，参数的长度必须和类的个数相等。最终的分类结果会是p/t最大的那个分类，其中p是通过Bayes计算出来的结果，t是阈值。 
-//        //这对于训练样本严重不均衡的情况尤其重要，比如分类0有200万数据，而分类1有2万数据，此时应用new NaiveBayes().setThresholds(Array(100.0,1.0))    这里t1=100  t2=1
-//     
-//      
-//      val Array(trainingData, testData) = labeledData.randomSplit(Array(0.8, 0.2))  
-//        
-//      val pipeline = new Pipeline().setStages(Array(assembler,label_indexer, rfClassifier))
-//      
-//      val model = pipeline.fit(trainingData)
-//      
-//      println("RF done in " + (System.currentTimeMillis()-startTime)/(1000*60) + " minutes." )
-//       
-//       
-//      val predictionResult = model.transform(testData)
-//        
-//      val eval_result = IntelUtil.funUtil.get_CF_Matrix(predictionResult)
-//       
-//      println(eval_result) 
-//      
-//     println("Current Precision_P is: " + eval_result.Precision_P)
-//     println("Current Recall_P is: " + eval_result.Recall_P)
+    
+        //保存带文件头
+    var savepath = rangedir + "FE_db_csv"
+    //val saveOptions = Map("header" -> "true", "path" -> savepath)
+    val saveOptions = Map("header" -> "false", "path" -> savepath)
+    labeledData.write.format("com.databricks.spark.csv").mode(SaveMode.Overwrite).options(saveOptions).save()
+    
+    
+    
+    
+    val assembler = new VectorAssembler()
+      .setInputCols(db_list.slice(2, db_list.length).toArray)
+      .setOutputCol("featureVector")
+ 
+     
+//        val normalizer = new Normalizer().setInputCol("features_Cat").setOutputCol("normFeatures")     //默认是L2
+//    val l2NormData = normalizer.transform(labeledData)
+//    println("Normalize dataframe")
+//    l2NormData.show(10)
+    
+    
+    val label_indexer = new StringIndexer()
+     .setInputCol("label")
+     .setOutputCol("label_idx")
+     .fit(labeledData)  
+       
+      
+    val rfClassifier = new RandomForestClassifier()
+        .setLabelCol("label_idx")
+        .setFeaturesCol("featureVector")
+        .setNumTrees(200)
+        .setMaxBins(10000)
+        .setMinInstancesPerNode(10)
+        .setThresholds(Array(100,1))
+        //为每个分类设置一个阈值，参数的长度必须和类的个数相等。最终的分类结果会是p/t最大的那个分类，其中p是通过Bayes计算出来的结果，t是阈值。 
+        //这对于训练样本严重不均衡的情况尤其重要，比如分类0有200万数据，而分类1有2万数据，此时应用new NaiveBayes().setThresholds(Array(100.0,1.0))    这里t1=100  t2=1
+     
+      
+      val Array(trainingData, testData) = labeledData.randomSplit(Array(0.8, 0.2))  
+        
+      val pipeline = new Pipeline().setStages(Array(assembler,label_indexer, rfClassifier))
+      
+      val model = pipeline.fit(trainingData)
+      
+      println("RF done in " + (System.currentTimeMillis()-startTime)/(1000*60) + " minutes." )
+       
+       
+      val predictionResult = model.transform(testData)
+        
+      val eval_result = IntelUtil.funUtil.get_CF_Matrix(predictionResult)
+       
+      println(eval_result) 
+      
+     println("Current Precision_P is: " + eval_result.Precision_P)
+     println("Current Recall_P is: " + eval_result.Recall_P)
      
      
  

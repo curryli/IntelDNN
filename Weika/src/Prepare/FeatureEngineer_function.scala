@@ -79,9 +79,7 @@ object FeatureEngineer_function {
     //  获取月+日     817214312  817    1117214312  1117 
     var labeledData = inputData
     //val getdate = udf[Long, String]{xstr => xstr.reverse.substring(6).reverse.toLong}
-    
-    labeledData = labeledData.sort("pri_acct_no_conv")
-    
+     
     labeledData = labeledData.withColumn("date", getdate(labeledData("tfr_dt_tm")))
    
     labeledData = labeledData.withColumn("day_week", get_day_week(labeledData("tfr_dt_tm")))
@@ -257,7 +255,7 @@ object FeatureEngineer_function {
     println("*******************************delta*********************************")
     val wt = Window.partitionBy("pri_acct_no_conv").orderBy("tfr_dt_tm")
     
-    labeledData = labeledData.withColumn("row_trans", functions.row_number().over(wt))
+    //labeledData = labeledData.withColumn("row_trans", functions.row_number().over(wt))
     
     
     //统计到上1笔
@@ -309,7 +307,7 @@ object FeatureEngineer_function {
     labeledData = labeledData.withColumn("money_near_last",money_near_last(Long_2_Double(labeledData("interval_money_1"))/Long_2_Double(labeledData("trans_at"))))
      
     //统计该笔交易与该卡上比交易是否异地 
-    labeledData = labeledData.withColumn("is_loc_changed", udf_bool_to_double(labeledData("acpt_ins_id_cd_RG").===(functions.lag("acpt_ins_id_cd_RG", 1).over(wt)))) 
+    labeledData = labeledData.withColumn("is_loc_changed", udf_bool_to_double(labeledData("acpt_ins_id_cd_RG").!==(functions.lag("acpt_ins_id_cd_RG", 1).over(wt)))) 
  
     println("b")
     labeledData.show(50)
@@ -344,7 +342,7 @@ object FeatureEngineer_function {
     labeledData = labeledData.withColumn("cur_query_cnt", sum(when(labeledData("trans_id").===("S00"), 1).otherwise(0)).over(W_cur))
     
     //统计该卡当日跨境交易总次数
-    labeledData = labeledData.withColumn("cur_cross_dist_cnt", sum(when(labeledData("cross_dist_in").===("cross_dist_in"), 1).otherwise(0)).over(W_cur))
+    labeledData = labeledData.withColumn("cur_cross_dist_cnt", sum(when(labeledData("cross_dist_in").===("1"), 1).otherwise(0)).over(W_cur))
     
     //统计该卡当日上下笔最小间隔时间
     labeledData = labeledData.withColumn("cur_cross_dist_cnt", min("interval_minutes_1").over(W_cur))
@@ -391,7 +389,7 @@ object FeatureEngineer_function {
     labeledData = labeledData.withColumn("day3_query_cnt", sum(when(labeledData("trans_id").===("S00"), 1).otherwise(0)).over(W_day3))
     
     //统计该卡前3日跨境交易总次数
-    labeledData = labeledData.withColumn("day3_cross_dist_cnt", sum(when(labeledData("cross_dist_in").===("cross_dist_in"), 1).otherwise(0)).over(W_day3))
+    labeledData = labeledData.withColumn("day3_cross_dist_cnt", sum(when(labeledData("cross_dist_in").===("1"), 1).otherwise(0)).over(W_day3))
     
     //统计该卡前3日上下笔最小间隔时间
     labeledData = labeledData.withColumn("day3_cross_dist_cnt", min("interval_minutes_1").over(W_day3))
@@ -453,7 +451,7 @@ object FeatureEngineer_function {
     labeledData = labeledData.withColumn("day7_query_cnt", sum(when(labeledData("trans_id").===("S00"), 1).otherwise(0)).over(W_day7))
     
     //统计该卡前7日跨境交易总次数
-    labeledData = labeledData.withColumn("day7_cross_dist_cnt", sum(when(labeledData("cross_dist_in").===("cross_dist_in"), 1).otherwise(0)).over(W_day7))
+    labeledData = labeledData.withColumn("day7_cross_dist_cnt", sum(when(labeledData("cross_dist_in").===("1"), 1).otherwise(0)).over(W_day7))
     
     //统计该卡前7日上下笔最小间隔时间
     labeledData = labeledData.withColumn("day7_cross_dist_cnt", min("interval_minutes_1").over(W_day7))
@@ -506,7 +504,7 @@ object FeatureEngineer_function {
     labeledData = labeledData.withColumn("day30_query_cnt", sum(when(labeledData("trans_id").===("S00"), 1).otherwise(0)).over(W_day30))
     
     //统计该卡前30日跨境交易总次数
-    labeledData = labeledData.withColumn("day30_cross_dist_cnt", sum(when(labeledData("cross_dist_in").===("cross_dist_in"), 1).otherwise(0)).over(W_day30))
+    labeledData = labeledData.withColumn("day30_cross_dist_cnt", sum(when(labeledData("cross_dist_in").===("1"), 1).otherwise(0)).over(W_day30))
     
     //统计该卡前30日上下笔最小间隔时间
     labeledData = labeledData.withColumn("day30_cross_dist_cnt", min("interval_minutes_1").over(W_day30))
@@ -560,7 +558,7 @@ object FeatureEngineer_function {
     labeledData = labeledData.withColumn("hist_query_cnt", sum(when(labeledData("trans_id").===("S00"), 1).otherwise(0)).over(W_hist))
     
     //统计该卡除当日外历史所有跨境交易总次数
-    labeledData = labeledData.withColumn("hist_cross_dist_cnt", sum(when(labeledData("cross_dist_in").===("cross_dist_in"), 1).otherwise(0)).over(W_hist))
+    labeledData = labeledData.withColumn("hist_cross_dist_cnt", sum(when(labeledData("cross_dist_in").===("1"), 1).otherwise(0)).over(W_hist))
     
     //统计该卡除当日外历史所有上下笔最小间隔时间
     labeledData = labeledData.withColumn("hist_cross_dist_cnt", min("interval_minutes_1").over(W_hist))
@@ -617,7 +615,7 @@ object FeatureEngineer_function {
     labeledData = labeledData.withColumn("min5_query_cnt", sum(when(labeledData("trans_id").===("S00"), 1).otherwise(0)).over(W_min5))
     
     //统计该卡前5分钟跨境交易总次数
-    labeledData = labeledData.withColumn("min5_cross_dist_cnt", sum(when(labeledData("cross_dist_in").===("cross_dist_in"), 1).otherwise(0)).over(W_min5))
+    labeledData = labeledData.withColumn("min5_cross_dist_cnt", sum(when(labeledData("cross_dist_in").===("1"), 1).otherwise(0)).over(W_min5))
  
     
    //统计15分钟内
@@ -648,7 +646,7 @@ object FeatureEngineer_function {
     labeledData = labeledData.withColumn("min15_query_cnt", sum(when(labeledData("trans_id").===("S00"), 1).otherwise(0)).over(W_min15))
     
     //统计该卡前15分钟跨境交易总次数
-    labeledData = labeledData.withColumn("min15_cross_dist_cnt", sum(when(labeledData("cross_dist_in").===("cross_dist_in"), 1).otherwise(0)).over(W_min15))
+    labeledData = labeledData.withColumn("min15_cross_dist_cnt", sum(when(labeledData("cross_dist_in").===("1"), 1).otherwise(0)).over(W_min15))
     
     
     //统计120分钟内
@@ -679,7 +677,7 @@ object FeatureEngineer_function {
     labeledData = labeledData.withColumn("min120_query_cnt", sum(when(labeledData("trans_id").===("S00"), 1).otherwise(0)).over(W_min120))
     
     //统计该卡前120分钟跨境交易总次数
-    labeledData = labeledData.withColumn("min120_cross_dist_cnt", sum(when(labeledData("cross_dist_in").===("cross_dist_in"), 1).otherwise(0)).over(W_min120))
+    labeledData = labeledData.withColumn("min120_cross_dist_cnt", sum(when(labeledData("cross_dist_in").===("1"), 1).otherwise(0)).over(W_min120))
     
     println("g")
     labeledData.show(50)
@@ -724,7 +722,7 @@ object FeatureEngineer_function {
     labeledData = labeledData.withColumn("is_spec_airc", is_spec_airc(labeledData("auth_id_resp_cd")))
      
     println("h")
-    labeledData.show(50)
+    labeledData.show(1000)
     println(labeledData.columns.mkString(",")) 
       
     labeledData
@@ -734,9 +732,8 @@ object FeatureEngineer_function {
       def get_FraudStat_term(ss: SparkSession, filename:String = "xrli/IntelDNN/Weika/weika_term_mchnt_stat"):DataFrame = {
     		val sc = ss.sparkContext
     	  val filename = "xrli/IntelDNN/Weika/weika_term_mchnt_stat"
-		    val fraud_stat_Rdd = sc.textFile(filename).map(str=> str.split(",")).map{ tmparr=>(tmparr(3),tmparr(7),tmparr(8),tmparr(9),tmparr(10))
-			    Row.fromSeq(tmparr.toSeq)
-    		}
+		    val fraud_stat_Rdd = sc.textFile(filename).map(str=> str.split(",")).map(tmparr=>Seq(tmparr(3),tmparr(1),tmparr(8),tmparr(9),tmparr(10))).map{ tmpseq=>Row.fromSeq(tmpseq)}
+			    
     		val schema = StructType(StructField("term_id_fraud",StringType,true)::StructField("tfr_dt_tm",StringType,true)::StructField("day3_fcnt_term",StringType,true)::StructField("day7_fcnt_term",StringType,true)::StructField("day30_fcnt_term",StringType,true)::Nil)
 		    var fraud_stat_DF = ss.createDataFrame(fraud_stat_Rdd, schema) 
 			  fraud_stat_DF
@@ -746,9 +743,8 @@ object FeatureEngineer_function {
        def get_FraudStat_mchnt(ss: SparkSession, filename:String = "xrli/IntelDNN/Weika/weika_term_mchnt_stat"):DataFrame = {
     		val sc = ss.sparkContext
     	  val filename = "xrli/IntelDNN/Weika/weika_term_mchnt_stat"
-		    val fraud_stat_Rdd = sc.textFile(filename).map(str=> str.split(",")).map{ tmparr=>(tmparr(5),tmparr(7),tmparr(11),tmparr(12),tmparr(13))
-			    Row.fromSeq(tmparr.toSeq)
-    		}
+		    val fraud_stat_Rdd = sc.textFile(filename).map(str=> str.split(",")).map(tmparr=>Seq(tmparr(5),tmparr(1),tmparr(11),tmparr(12),tmparr(13))).map{ tmpseq=>Row.fromSeq(tmpseq)}
+ 
     		val schema = StructType(StructField("mchnt_cd_fraud",StringType,true)::StructField("tfr_dt_tm",StringType,true)::StructField("day3_fcnt_mchnt",StringType,true)::StructField("day7_fcnt_mchnt",StringType,true)::StructField("day30_fcnt_mchnt",StringType,true)::Nil)
 		    var fraud_stat_DF = ss.createDataFrame(fraud_stat_Rdd, schema) 
 			  fraud_stat_DF

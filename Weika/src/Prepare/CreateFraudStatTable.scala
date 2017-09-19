@@ -120,6 +120,8 @@ object CreateFraudStatTable {
     
     
     println(fraud_data.columns.mkString(","))
+    //sys_tra_no,tfr_dt_tm,pri_acct_no_conv,term_id,trans_region,mchnt_cd,fraud_tp,date,day3_fcnt_term,day7_fcnt_term,day30_fcnt_term,day3_fcnt_mchnt,day7_fcnt_mchnt,day30_fcnt_mchnt
+    
     fraud_data.write.csv("xrli/IntelDNN/Weika/weika_term_mchnt_stat")
     
 //    fraud_data.registerTempTable("fraud_data_TB")  
