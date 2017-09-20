@@ -1,4 +1,4 @@
-package model
+package Prepare
 import org.apache.log4j.Level
 import org.apache.log4j.Logger
 import org.apache.spark._
@@ -41,10 +41,16 @@ import org.apache.spark.ml.feature.QuantileDiscretizer
 import scala.collection.mutable.HashMap
 
 
-object Expand_Indexed_RF {
+object GetTestSamples {
  
-  
-   val rangedir = IntelUtil.varUtil.rangeDir 
+    val startdate = IntelUtil.varUtil.startdate
+    val enddate = IntelUtil.varUtil.enddate
+    val rangedir = IntelUtil.varUtil.rangeDir 
+    val usedArr_filled = IntelUtil.constUtil.usedArr.map{x => x + "_filled"}
+     
+    val fraudType = "04"
+    
+      
    //var idx_modelname = IntelUtil.varUtil.idx_model
    var idx_modelname = IntelUtil.varUtil.idx_model
    
@@ -74,18 +80,44 @@ object Expand_Indexed_RF {
  
      
     var input_dir = rangedir + "Labeled_All"
-    var labeledData = IntelUtil.get_from_HDFS.get_Labeled_All(ss, input_dir)// .cache         //.persist(StorageLevel.MEMORY_AND_DISK_SER)//
-    //labeledData.show(50)
- 
-    //labeledData = labeledData.sample(false, 0.001).cache
+    
+     
+    var fraud_join_Data = IntelUtil.get_from_HDFS.get_fraud_join_DF(ss, startdate, enddate).persist(StorageLevel.MEMORY_AND_DISK_SER)
+    var fraudType_infraud = fraud_join_Data.filter(fraud_join_Data("fraud_tp")=== fraudType) 
+    var allfraud_cards = fraud_join_Data.select("pri_acct_no_conv").distinct().persist(StorageLevel.MEMORY_AND_DISK_SER) 
+    var allfraud_cards_list = allfraud_cards.rdd.map(r=>r.getString(0)).collect()
+    var AllData = IntelUtil.get_from_HDFS.get_filled_DF(ss, startdate, enddate).repartition(1000) 
+    var Normal_data = AllData.filter(!AllData("pri_acct_no_conv").isin(allfraud_cards_list:_*))
+    var Normal_filled = Normal_data.selectExpr(usedArr_filled:_*)
     
     
-    println("testData done in " + (System.currentTimeMillis()-startTime)/(1000*60) + " minutes." )
+    for(col<-usedArr_filled)
+       Normal_filled = Normal_filled.withColumnRenamed(col, col.substring(0, col.length-7) )
+    
+    var fraudType_fraud = fraudType_infraud.join(fraudType_infraud, fraudType_infraud("sys_tra_no")===fraudType_infraud("sys_tra_no"), "leftsemi")
+    var fraudType_filled = fraudType_fraud.selectExpr(usedArr_filled:_*)
+    for(col<-usedArr_filled)
+      fraudType_filled = fraudType_filled.withColumnRenamed(col, col.substring(0, col.length-7) )
+   
+    val udf_Map0 = udf[Double, String]{xstr => 0.0}
+    val udf_Map1 = udf[Double, String]{xstr => 1.0}
+         
+    var NormalData_labeled = Normal_filled.withColumn("isFraud", udf_Map0(Normal_filled("trans_md_filled")))
+    var fraudType_labeled = fraudType_filled.withColumn("isFraud", udf_Map1(fraudType_filled("trans_md_filled")))
+    var labeledData = fraudType_labeled.unionAll(NormalData_labeled)
+    
+    println("get labeledData done in " + (System.currentTimeMillis()-startTime)/(1000*60) + " minutes." )
       
     labeledData = Prepare.FeatureEngineer_function.FE_function(ss, labeledData)
     
-    //labeledData = labeledData.sort("pri_acct_no_conv")
-    //labeledData.show(50)
+     
+    
+    val getdate = udf[Long, String]{xstr => xstr.substring(0,4).toLong}
+    labeledData = labeledData.filter(getdate(labeledData("tfr_dt_tm").===(enddate)))
+    
+    labeledData.count()
+    println("labeledData in one day obtained, and total count is: ", labeledData.count())  
+    
     
     var All_cols =  labeledData.columns
     
@@ -135,71 +167,12 @@ object Expand_Indexed_RF {
     //labeledData.show()
     
     labeledData = labeledData.selectExpr(db_list:_*).persist(StorageLevel.MEMORY_AND_DISK_SER)
-    labeledData.show()
+    labeledData.show(5)
     
-    labeledData.rdd.map(_.mkString(",")).saveAsTextFile(rangedir + "FE_db_0919")
+    labeledData.rdd.map(_.mkString(",")).saveAsTextFile(rangedir + "FE_db_enddate")
     println("Saved FE_db done:   ",labeledData.columns.mkString(","))
      
-    
-        //保存带文件头
-    var savepath = rangedir + "FE_db_csv"
-    //val saveOptions = Map("header" -> "true", "path" -> savepath)
-    val saveOptions = Map("header" -> "false", "path" -> savepath)
-    labeledData.write.format("com.databricks.spark.csv").mode(SaveMode.Overwrite).options(saveOptions).save()
-    
-    
-    
-    
-    val assembler = new VectorAssembler()
-      .setInputCols(db_list.slice(2, db_list.length).toArray)
-      .setOutputCol("featureVector")
- 
      
-//        val normalizer = new Normalizer().setInputCol("features_Cat").setOutputCol("normFeatures")     //默认是L2
-//    val l2NormData = normalizer.transform(labeledData)
-//    println("Normalize dataframe")
-//    l2NormData.show(10)
-    
-    
-    val label_indexer = new StringIndexer()
-     .setInputCol("label")
-     .setOutputCol("label_idx")
-     .fit(labeledData)  
-       
-      
-    val rfClassifier = new RandomForestClassifier()
-        .setLabelCol("label_idx")
-        .setFeaturesCol("featureVector")
-        .setNumTrees(200)
-        .setMaxBins(10000)
-        .setMinInstancesPerNode(10)
-        .setThresholds(Array(100,1))
-        //为每个分类设置一个阈值，参数的长度必须和类的个数相等。最终的分类结果会是p/t最大的那个分类，其中p是通过Bayes计算出来的结果，t是阈值。 
-        //这对于训练样本严重不均衡的情况尤其重要，比如分类0有200万数据，而分类1有2万数据，此时应用new NaiveBayes().setThresholds(Array(100.0,1.0))    这里t1=100  t2=1
-     
-      
-      val Array(trainingData, testData) = labeledData.randomSplit(Array(0.8, 0.2))  
-        
-      val pipeline = new Pipeline().setStages(Array(assembler,label_indexer, rfClassifier))
-      
-      val model = pipeline.fit(trainingData)
-      
-      println("RF done in " + (System.currentTimeMillis()-startTime)/(1000*60) + " minutes." )
-       
-       
-      val predictionResult = model.transform(testData)
-        
-      val eval_result = IntelUtil.funUtil.get_CF_Matrix(predictionResult)
-       
-      println(eval_result) 
-      
-     println("Current Precision_P is: " + eval_result.Precision_P)
-     println("Current Recall_P is: " + eval_result.Recall_P)
-     
-     
- 
-    println("All done in " + (System.currentTimeMillis()-startTime)/(1000*60) + " minutes." )   
-   
      
   }
   
