@@ -80,42 +80,50 @@ object GetTestSamples {
  
      
     var input_dir = rangedir + "Labeled_All"
-    
      
     var fraud_join_Data = IntelUtil.get_from_HDFS.get_fraud_join_DF(ss, startdate, enddate).persist(StorageLevel.MEMORY_AND_DISK_SER)
     var fraudType_infraud = fraud_join_Data.filter(fraud_join_Data("fraud_tp")=== fraudType) 
     var allfraud_cards = fraud_join_Data.select("pri_acct_no_conv").distinct().persist(StorageLevel.MEMORY_AND_DISK_SER) 
     var allfraud_cards_list = allfraud_cards.rdd.map(r=>r.getString(0)).collect()
-    var AllData = IntelUtil.get_from_HDFS.get_filled_DF(ss, startdate, enddate).repartition(1000) 
-    var Normal_data = AllData.filter(!AllData("pri_acct_no_conv").isin(allfraud_cards_list:_*))
-    var Normal_filled = Normal_data.selectExpr(usedArr_filled:_*)
+    println(1)
     
+    
+    var AllData = IntelUtil.get_from_HDFS.get_filled_DF(ss, startdate, enddate).repartition(1000) 
+    var Normal_data = AllData.filter(!AllData("pri_acct_no_conv_filled").isin(allfraud_cards_list:_*))
+    println(2)
+    var Normal_filled = Normal_data.selectExpr(usedArr_filled:_*)
+    println(3)
     
     for(col<-usedArr_filled)
        Normal_filled = Normal_filled.withColumnRenamed(col, col.substring(0, col.length-7) )
     
-    var fraudType_fraud = fraudType_infraud.join(fraudType_infraud, fraudType_infraud("sys_tra_no")===fraudType_infraud("sys_tra_no"), "leftsemi")
+       println(4)
+    var fraudType_fraud = AllData.join(fraudType_infraud, AllData("sys_tra_no")===fraudType_infraud("sys_tra_no"), "leftsemi")
     var fraudType_filled = fraudType_fraud.selectExpr(usedArr_filled:_*)
     for(col<-usedArr_filled)
       fraudType_filled = fraudType_filled.withColumnRenamed(col, col.substring(0, col.length-7) )
    
+      println(5)
+      
     val udf_Map0 = udf[Double, String]{xstr => 0.0}
     val udf_Map1 = udf[Double, String]{xstr => 1.0}
          
-    var NormalData_labeled = Normal_filled.withColumn("isFraud", udf_Map0(Normal_filled("trans_md_filled")))
-    var fraudType_labeled = fraudType_filled.withColumn("isFraud", udf_Map1(fraudType_filled("trans_md_filled")))
+    var NormalData_labeled = Normal_filled.withColumn("label", udf_Map0(Normal_filled("trans_md")))
+    var fraudType_labeled = fraudType_filled.withColumn("label", udf_Map1(fraudType_filled("trans_md")))
     var labeledData = fraudType_labeled.unionAll(NormalData_labeled)
+    
+    labeledData.rdd.map(_.mkString(",")).saveAsTextFile(rangedir + "labeledData_tmp")
     
     println("get labeledData done in " + (System.currentTimeMillis()-startTime)/(1000*60) + " minutes." )
       
     labeledData = Prepare.FeatureEngineer_function.FE_function(ss, labeledData)
-    
      
-    
     val getdate = udf[Long, String]{xstr => xstr.substring(0,4).toLong}
     labeledData = labeledData.filter(getdate(labeledData("tfr_dt_tm").===(enddate)))
     
     labeledData.count()
+    labeledData.rdd.map(_.mkString(",")).saveAsTextFile(rangedir + "labeledData_enddate")
+    
     println("labeledData in one day obtained, and total count is: ", labeledData.count())  
     
     
