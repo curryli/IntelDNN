@@ -46,11 +46,10 @@ object SaveLabelFlow {
     val usedArr_filled = IntelUtil.constUtil.usedArr.map{x => x + "_filled"}
     
     //可以调整
-    val sample_cards_ratio = 0.0005
-    val TF_ratio = 500
+    val sample_cards_ratio = 0.001
+    val TF_ratio = 5000
     val fraudType = "04"
-    
-    
+       
     var fraudType_cards_num = 0L
     var normal_cards_num = 0L
     var fraudType_related_fraud_count = 0L

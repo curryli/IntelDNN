@@ -217,5 +217,23 @@ object get_from_HDFS {
        DF_schema_used
     }
    
+   
+   
+   def get_FE_DF(ss: SparkSession, input_dir: String):DataFrame = {
+       val sc = ss.sparkContext
+       
+       val Row_RDD = sc.textFile(input_dir).map{str=>
+           var tmparr = str.split(",")      
+           var tmpList = List(tmparr(0).toString()).:+(tmparr(1).toString)
+           for(i<- 2 to tmparr.length-1){
+             tmpList = tmpList.:+(tmparr(i).toString)
+           }   
+           
+           
+           Row.fromSeq(tmpList.toSeq)
+       }
+       var DF_schema_used = ss.createDataFrame(Row_RDD, funUtil.get_schema(constUtil.FE_head))
+       DF_schema_used
+    }    
          
 }

@@ -112,22 +112,31 @@ object GetTestSamples {
     var fraudType_labeled = fraudType_filled.withColumn("label", udf_Map1(fraudType_filled("trans_md")))
     var labeledData = fraudType_labeled.unionAll(NormalData_labeled)
     
-    labeledData.rdd.map(_.mkString(",")).saveAsTextFile(rangedir + "labeledData_tmp")
+    //labeledData.rdd.map(_.mkString(",")).saveAsTextFile(rangedir + "labeledData_tmp")
     
     println("get labeledData done in " + (System.currentTimeMillis()-startTime)/(1000*60) + " minutes." )
       
     labeledData = Prepare.FeatureEngineer_function.FE_function(ss, labeledData)
+    println("FeatureEngineer_function done in "  + (System.currentTimeMillis()-startTime)/(1000*60) + " minutes." )   
+    
+    //labeledData = labeledData.repartition(1000).persist(StorageLevel.MEMORY_AND_DISK_SER)
+    //println("repartition done in "  + (System.currentTimeMillis()-startTime)/(1000*60) + " minutes." )  
+    
+    labeledData.rdd.map(_.mkString(",")).saveAsTextFile(rangedir + "labeledData_FE")
+    println("labeledData_FE save to HDFS done in "  + (System.currentTimeMillis()-startTime)/(1000*60) + " minutes." )  
+    //labeledData = labeledData.where("date = $enddate")
+ 
+    var new_labeled = labeledData.filter(labeledData("date").===(930L)).persist(StorageLevel.MEMORY_AND_DISK_SER)    //java.lang.OutOfMemoryError: GC overhead limit exceeded
+    labeledData.unpersist(blocking=false)
+    
      
-    val getdate = udf[Long, String]{xstr => xstr.substring(0,4).toLong}
-    labeledData = labeledData.filter(getdate(labeledData("tfr_dt_tm").===(enddate)))
+    //println("new_labeled in one day obtained, and total count is: ", new_labeled.count())  
     
-    labeledData.count()
-    labeledData.rdd.map(_.mkString(",")).saveAsTextFile(rangedir + "labeledData_enddate")
+    new_labeled.rdd.map(_.mkString(",")).saveAsTextFile(rangedir + "new_labeled_enddate")
+     
+    println("save new_labeled_enddate done")  
     
-    println("labeledData in one day obtained, and total count is: ", labeledData.count())  
-    
-    
-    var All_cols =  labeledData.columns
+    var All_cols =  new_labeled.columns
     
     var Arr_to_idx = IntelUtil.constUtil.DisperseArr
     
@@ -141,17 +150,17 @@ object GetTestSamples {
     
     val my_index_Model = PipelineModel.load(idx_modelname)
    
-    labeledData = my_index_Model.transform(labeledData)
+    new_labeled = my_index_Model.transform(new_labeled)
       
     println("Index pipeline done in " + (System.currentTimeMillis()-startTime)/(1000*60) + " minutes." )
     
     val feature_arr = no_idx_arr.++(CatVecArr)      //加载idx_model时使用
     println("feature_arr: ", feature_arr.mkString(","))
     
-    labeledData = labeledData.selectExpr(List("pri_acct_no_conv","label").++(feature_arr):_*) 
+    new_labeled = new_labeled.selectExpr(List("pri_acct_no_conv","label").++(feature_arr):_*) 
 
-    //labeledData.dtypes.foreach(println)
-    labeledData.show(5)
+    //new_labeled.dtypes.foreach(println)
+    new_labeled.show(5)
      //该数组李必须都是doubletype，否则VectorAssembler报错 
      
    // val feature_arr = no_idx_arr.++(CatVecArr)    //不加载idx_model时使用
@@ -164,21 +173,24 @@ object GetTestSamples {
      for(col <- feature_arr){
         val newcol = col + "_db" 
         db_list = db_list.:+(newcol)
-        labeledData = labeledData.withColumn(newcol, labeledData.col(col).cast(DoubleType))
+        new_labeled = new_labeled.withColumn(newcol, new_labeled.col(col).cast(DoubleType))
      }
  
     println("change to double done in " + (System.currentTimeMillis()-startTime)/(1000*60) + " minutes." )
-    //labeledData.dtypes.foreach(println)
+    //new_labeled.dtypes.foreach(println)
     //db_list.foreach(println)
         
-    labeledData = labeledData.na.fill(-1.0)   // 因为这里填的是-1.0，是double类型，所以  好像只能对double类型的列起作用。  如果填充“1”，那么只对String类型起作用。
-    //labeledData.show()
+    new_labeled = new_labeled.na.fill(-1.0)   // 因为这里填的是-1.0，是double类型，所以  好像只能对double类型的列起作用。  如果填充“1”，那么只对String类型起作用。
+    //new_labeled.show()
     
-    labeledData = labeledData.selectExpr(db_list:_*).persist(StorageLevel.MEMORY_AND_DISK_SER)
-    labeledData.show(5)
+    new_labeled = new_labeled.selectExpr(db_list:_*).persist(StorageLevel.MEMORY_AND_DISK_SER)
+    new_labeled.show(5)
     
-    labeledData.rdd.map(_.mkString(",")).saveAsTextFile(rangedir + "FE_db_enddate")
-    println("Saved FE_db done:   ",labeledData.columns.mkString(","))
+    new_labeled.rdd.map(_.mkString(",")).saveAsTextFile(rangedir + "FE_db_enddate")
+    
+    new_labeled.unpersist(blocking=false)
+    
+    println("Saved FE_db done:   ",new_labeled.columns.mkString(","))
      
      
      

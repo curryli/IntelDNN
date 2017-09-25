@@ -725,9 +725,9 @@ object FeatureEngineer_function {
     val is_spec_airc = udf[Double, String]{xstr => any_to_double(xstr=="Y012345")}    
     labeledData = labeledData.withColumn("is_spec_airc", is_spec_airc(labeledData("auth_id_resp_cd")))
      
-    println("h")
+    //println("h")
     //labeledData.show(1000)
-    println(labeledData.columns.mkString(",")) 
+    //println(labeledData.columns.mkString(",")) 
       
     labeledData
   }
