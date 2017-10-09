@@ -81,25 +81,27 @@ object SaveLabel_for_test {
  
     val startTime = System.currentTimeMillis(); 
     
-    save_fraudType_1(ss)
-    //println("fraudType_cards count is " + fraudType_cards_num)
-    println("step1 done in " + (System.currentTimeMillis()-startTime)/(1000*60) + " minutes." )
-      
-    save_sample_cards_2(ss)
-    println("step2 done in " + (System.currentTimeMillis()-startTime)/(1000*60) + " minutes." )
+//    save_fraudType_1(ss)
+//    //println("fraudType_cards count is " + fraudType_cards_num)
+//    println("step1 done in " + (System.currentTimeMillis()-startTime)/(1000*60) + " minutes." )
+//      
+//    save_sample_cards_2(ss)
+//    println("step2 done in " + (System.currentTimeMillis()-startTime)/(1000*60) + " minutes." )
+//    
+//    save_Alldata_bycards_3(ss)
+//    println("step3 done in " + (System.currentTimeMillis()-startTime)/(1000*60) + " minutes." )
+//    
+//    save_labeled_new_4(ss)
+//    println("step4 done in " + (System.currentTimeMillis()-startTime)/(1000*60) + " minutes." )
+//    
+//    save_FE_5(ss)
+//    println("step5 done in " + (System.currentTimeMillis()-startTime)/(1000*60) + " minutes." )
+//    
+//    drop_confuse_6(ss)
+//    println("step6 done in " + (System.currentTimeMillis()-startTime)/(1000*60) + " minutes." )
     
-    save_Alldata_bycards_3(ss)
-    println("step3 done in " + (System.currentTimeMillis()-startTime)/(1000*60) + " minutes." )
-    
-    save_labeled_new_4(ss)
-    println("step4 done in " + (System.currentTimeMillis()-startTime)/(1000*60) + " minutes." )
-    
-    save_FE_5(ss)
-    println("step5 done in " + (System.currentTimeMillis()-startTime)/(1000*60) + " minutes." )
-    
-    drop_confuse_6(ss)
-    println("step6 done in " + (System.currentTimeMillis()-startTime)/(1000*60) + " minutes." )
-    
+      save_train_test_7(ss)
+      println("step7 done in " + (System.currentTimeMillis()-startTime)/(1000*60) + " minutes." )
     
   }
     
@@ -320,21 +322,70 @@ object SaveLabel_for_test {
      val label= "label" 
      val cardcol= "pri_acct_no_conv"
     
-     val Fraud = FE_Data.filter(FE_Data("label")===1)
+     var Fraud = FE_Data.filter(FE_Data("label")===1)
+     val card_c_F = Fraud.select("pri_acct_no_conv").distinct().rdd.map(x=>x.getString(0)).collect()
+//     真实比例150000
+//     [[29778984     2161]
+//     [   12805     4158]]
+     
+     Fraud = Fraud.sample(false, 0.012)
+      
      val Normal = FE_Data.filter(FE_Data("label")===0)
     
      println("Normal count: ", Normal.count())
      
-     val card_c_F = Fraud.select("pri_acct_no_conv").distinct().rdd.map(x=>x.getString(0)).collect()
+     
  
      val fine_N = Normal.filter(!Normal("pri_acct_no_conv").isin(card_c_F:_*))
      println("fine_N: ", fine_N.count())
     
      val last_data = Fraud.union(fine_N)
-     last_data.rdd.map(_.mkString(",")).saveAsTextFile(rangedir + "FE_last")    
+     last_data.rdd.map(_.mkString(",")).saveAsTextFile(rangedir + "FE_test_real") 
+     println("Fraud count: ", Fraud.count(), "fine_N  count: ", fine_N.count())
     
+//     (Normal count: ,29841749)
+//(fine_N: ,29781145)
+//(Fraud count: ,215,fine_N  count: ,29781145)
+
     }
   
   
+   def save_train_test_7(ss: SparkSession ): Unit ={
+     val sc = ss.sparkContext
+     var FE_Data = IntelUtil.get_from_HDFS.get_FE_DF(ss, rangedir + "FE_db").persist(StorageLevel.MEMORY_AND_DISK_SER)
+     
+     val label= "label" 
+     val cardcol= "pri_acct_no_conv"
+    
+     var Fraud = FE_Data.filter(FE_Data("label")===1)
+      
+     val card_c_F = Fraud.select("pri_acct_no_conv").distinct().rdd.map(x=>x.getString(0)).collect()
+     
+     val Normal = FE_Data.filter(FE_Data("label")===0)
+     println("Normal count: ", Normal.count())
+     val fine_N = Normal.filter(!Normal("pri_acct_no_conv").isin(card_c_F:_*))
+     println("fine_N: ", fine_N.count())
+     
+//     真实比例150000
+//     [[29778984     2161]
+//     [   12805     4158]]
+     
+     var Array(trainFraud, testFraud) = Fraud.randomSplit(Array(0.98, 0.02))
+     println("trainFraud: ", trainFraud.count(), "testFraud: ", testFraud.count())
+      
+     var Array(trainNormal, testNormal) = fine_N.randomSplit(Array(0.05, 0.95))
+     println("trainNormal: ", trainNormal.count(), "testNormal: ", testNormal.count())
+    
+     val train_data = trainFraud.union(trainNormal)
+     train_data.rdd.map(_.mkString(",")).saveAsTextFile(rangedir + "FE_train_data") 
+     
+     val test_data = testFraud.union(testNormal)
+     test_data.rdd.map(_.mkString(",")).saveAsTextFile(rangedir + "FE_test_data")
+     
+    
+//     (fine_N: ,29781145)
+//(trainFraud: ,16607,testFraud: ,355)
+//(trainNormal: ,1489925,testNormal: ,28291220)
+    }
   
 }
