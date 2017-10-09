@@ -41,19 +41,12 @@ import org.apache.spark.ml.feature.QuantileDiscretizer
 import scala.collection.mutable.HashMap
 
 
-object GetTestSamples {
+object TestSamples {
  
     val startdate = IntelUtil.varUtil.startdate
     val enddate = IntelUtil.varUtil.enddate
-    val rangedir = IntelUtil.varUtil.rangeDir 
-    val usedArr_filled = IntelUtil.constUtil.usedArr.map{x => x + "_filled"}
-     
-    val fraudType = "04"
-    
-      
-   //var idx_modelname = IntelUtil.varUtil.idx_model
-   var idx_modelname = IntelUtil.varUtil.idx_model
-   
+    val rangedir = IntelUtil.varUtil.testDir 
+ 
    
   def main(args: Array[String]): Unit = {
 
@@ -79,61 +72,24 @@ object GetTestSamples {
  
     val startTime = System.currentTimeMillis(); 
  
-     
     var input_dir = rangedir + "Labeled_All"
+    var labeledData = IntelUtil.get_from_HDFS.get_Labeled_All(ss, input_dir).persist(StorageLevel.MEMORY_AND_DISK_SER)
      
-    var fraud_join_Data = IntelUtil.get_from_HDFS.get_fraud_join_DF(ss, startdate, enddate).persist(StorageLevel.MEMORY_AND_DISK_SER)
-    var fraudType_infraud = fraud_join_Data.filter(fraud_join_Data("fraud_tp")=== fraudType) 
-    var allfraud_cards = fraud_join_Data.select("pri_acct_no_conv").distinct().persist(StorageLevel.MEMORY_AND_DISK_SER) 
-    var allfraud_cards_list = allfraud_cards.rdd.map(r=>r.getString(0)).collect()
-  
-    var AllData = IntelUtil.get_from_HDFS.get_filled_DF(ss, startdate, enddate).repartition(1000) 
-    
-     
-    AllData = AllData.sample(false, 0.000001, 0).persist(StorageLevel.MEMORY_AND_DISK_SER)
-    println("AllData count: ", AllData.count())
     
     
-    var Normal_data = AllData.filter(!AllData("pri_acct_no_conv_filled").isin(allfraud_cards_list:_*))
-    println(2)
-    var Normal_filled = Normal_data.selectExpr(usedArr_filled:_*).persist(StorageLevel.MEMORY_AND_DISK_SER)
-    println(3)
-    
-    for(col<-usedArr_filled)
-       Normal_filled = Normal_filled.withColumnRenamed(col, col.substring(0, col.length-7) )
-    
-       println(4)
-    var fraudType_fraud = AllData.join(fraudType_infraud, AllData("sys_tra_no")===fraudType_infraud("sys_tra_no"), "leftsemi")
-    var fraudType_filled = fraudType_fraud.selectExpr(usedArr_filled:_*)
-    for(col<-usedArr_filled)
-      fraudType_filled = fraudType_filled.withColumnRenamed(col, col.substring(0, col.length-7) )
-   
-    
-      
-      
-      println(5)
-      
-    val udf_Map0 = udf[Double, String]{xstr => 0.0}
-    val udf_Map1 = udf[Double, String]{xstr => 1.0}
-         
-    var NormalData_labeled = Normal_filled.withColumn("label", udf_Map0(Normal_filled("trans_md")))
-    var fraudType_labeled = fraudType_filled.withColumn("label", udf_Map1(fraudType_filled("trans_md")))
-    var labeledData = fraudType_labeled.unionAll(NormalData_labeled).persist(StorageLevel.MEMORY_AND_DISK_SER)
-   
-    AllData.unpersist(blocking=false)  
-    Normal_filled.unpersist(blocking=false) 
-    allfraud_cards.unpersist(blocking=false) 
-    fraud_join_Data.unpersist(blocking=false) 
-     
-    println("get labeledData done in " + (System.currentTimeMillis()-startTime)/(1000*60) + " minutes." )
-      
-    //labeledData = Prepare.FeatureEngineer_function.FE_function(ss, labeledData)
-    var new_labeled = FE_new.FE_function(ss, labeledData).persist(StorageLevel.MEMORY_AND_DISK_SER)
-    
+    var new_labeled = labeledData.sample(false, 0.00001, 0).persist(StorageLevel.MEMORY_AND_DISK_SER)
+    println("new_labeled count ", new_labeled.count())
+    println("new_labeled done in " + (System.currentTimeMillis()-startTime)/(1000*60) + " minutes." )
+        
     labeledData.unpersist(blocking=false)
-    
-    println("FeatureEngineer_function done in "  + (System.currentTimeMillis()-startTime)/(1000*60) + " minutes." )   
      
+    new_labeled = FE_new.FE_function(ss, new_labeled) 
+    
+    
+    
+    println("FE done in " + (System.currentTimeMillis()-startTime)/(1000*60) + " minutes." )
+    
+    ////////////////////////////////////////
     var All_cols =  new_labeled.columns
     
     var Arr_to_idx = IntelUtil.constUtil.DisperseArr
@@ -143,12 +99,12 @@ object GetTestSamples {
 
     val CatVecArr = Arr_to_idx.map { x => x + "_idx"}
     
-    
+    var idx_modelname = IntelUtil.varUtil.idx_model
     val my_index_Model = PipelineModel.load(idx_modelname)
    
     new_labeled = my_index_Model.transform(new_labeled)
       
-    println("Index pipeline done in " + (System.currentTimeMillis()-startTime)/(1000*60) + " minutes." )
+    println("Index pipeline done." )
     
     val feature_arr = no_idx_arr.++(CatVecArr)      //加载idx_model时使用
     println("feature_arr: ", feature_arr.mkString(","))
@@ -167,22 +123,20 @@ object GetTestSamples {
         new_labeled = new_labeled.withColumn(newcol, new_labeled.col(col).cast(DoubleType))
      }
  
-    println("change to double done in " + (System.currentTimeMillis()-startTime)/(1000*60) + " minutes." )
+    println("change to double done.")
+  
      
     new_labeled = new_labeled.na.fill(-1.0)   // 因为这里填的是-1.0，是double类型，所以  好像只能对double类型的列起作用。  如果填充“1”，那么只对String类型起作用。
    
-    new_labeled = new_labeled.selectExpr(db_list:_*).persist(StorageLevel.MEMORY_AND_DISK_SER)
+    new_labeled = new_labeled.selectExpr(db_list:_*) 
     
-    new_labeled = new_labeled.filter(new_labeled("date").===(930L)).persist(StorageLevel.MEMORY_AND_DISK_SER)    //java.lang.OutOfMemoryError: GC overhead limit exceeded
- 
+      ////////////////////////////////////////  
     
+    new_labeled = new_labeled.filter(new_labeled("label").===(1)) 
+    println("new_labeled2 count ", new_labeled.count())
+    //new_labeled.rdd.map(_.mkString(",")).saveAsTextFile(rangedir + "tmp")
+    //println("new_labeled2 done in " + (System.currentTimeMillis()-startTime)/(1000*60) + " minutes." )
     
-    var savepath = rangedir + "labeledData_FE_newest"
-    val saveOptions = Map("header" -> "false", "path" -> savepath)
-    new_labeled.write.format("com.databricks.spark.csv").mode(SaveMode.Overwrite).options(saveOptions).save()
-     
-    println("Saved FE_db done:   ",new_labeled.columns.mkString(","))
-     
      
      
   }

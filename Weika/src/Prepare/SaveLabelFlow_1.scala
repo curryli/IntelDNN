@@ -46,8 +46,8 @@ object SaveLabelFlow {
     val usedArr_filled = IntelUtil.constUtil.usedArr.map{x => x + "_filled"}
     
     //可以调整
-    val sample_cards_ratio = 0.001
-    val TF_ratio = 5000
+    val sample_cards_ratio = 0.005
+    val TF_ratio = 500
     val fraudType = "04"
        
     var fraudType_cards_num = 0L
@@ -127,7 +127,7 @@ object SaveLabelFlow {
         var AllData = IntelUtil.get_from_HDFS.get_filled_DF(ss, startdate, enddate).repartition(1000) 
         var tmp_ratio = fraudType_related_fraud_count.toDouble/80000000.toDouble
         var Ratio =  tmp_ratio min sample_ratio
-        
+         
         val All_sample_cards = AllData.sample(false, Ratio, 0).select("pri_acct_no_conv").distinct()//.persist(StorageLevel.MEMORY_AND_DISK_SER) 
         
         All_sample_cards.rdd.map(r=>r.getString(0)).coalesce(1).saveAsTextFile(rangedir + "All_sample_cards")

@@ -173,6 +173,7 @@ object get_from_HDFS {
        
        println("Row_RDD done")
        var DF_schema_labeled = ss.createDataFrame(Row_RDD, funUtil.get_schema(constUtil.labeledArr))
+       //var DF_schema_labeled = ss.createDataFrame(Row_RDD, funUtil.get_schema(constUtil.Labeled_All_Arr))
        DF_schema_labeled
     }     
      
