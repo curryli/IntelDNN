@@ -81,21 +81,21 @@ object SaveLabel_for_test {
  
     val startTime = System.currentTimeMillis(); 
     
-//    save_fraudType_1(ss)
-//    //println("fraudType_cards count is " + fraudType_cards_num)
-//    println("step1 done in " + (System.currentTimeMillis()-startTime)/(1000*60) + " minutes." )
-//      
-//    save_sample_cards_2(ss)
-//    println("step2 done in " + (System.currentTimeMillis()-startTime)/(1000*60) + " minutes." )
-//    
-//    save_Alldata_bycards_3(ss)
-//    println("step3 done in " + (System.currentTimeMillis()-startTime)/(1000*60) + " minutes." )
-//    
-//    save_labeled_new_4(ss)
-//    println("step4 done in " + (System.currentTimeMillis()-startTime)/(1000*60) + " minutes." )
-//    
-//    save_FE_5(ss)
-//    println("step5 done in " + (System.currentTimeMillis()-startTime)/(1000*60) + " minutes." )
+    save_fraudType_1(ss)
+    //println("fraudType_cards count is " + fraudType_cards_num)
+    println("step1 done in " + (System.currentTimeMillis()-startTime)/(1000*60) + " minutes." )
+      
+    save_sample_cards_2(ss)
+    println("step2 done in " + (System.currentTimeMillis()-startTime)/(1000*60) + " minutes." )
+    
+    save_Alldata_bycards_3(ss)
+    println("step3 done in " + (System.currentTimeMillis()-startTime)/(1000*60) + " minutes." )
+    
+    save_labeled_new_4(ss)
+    println("step4 done in " + (System.currentTimeMillis()-startTime)/(1000*60) + " minutes." )
+    
+    save_FE_5(ss)
+    println("step5 done in " + (System.currentTimeMillis()-startTime)/(1000*60) + " minutes." )
     
     drop_confuse_6(ss)
     println("step6 done in " + (System.currentTimeMillis()-startTime)/(1000*60) + " minutes." )
