@@ -47,7 +47,7 @@ object get_from_HDFS {
          All_DF = All_DF.unionAll(tmp_DF)
     } 
        
-      All_DF =  All_DF.filter(All_DF("card_attr").=!=("01") )
+      //All_DF =  All_DF.filter(All_DF("card_attr").=!=("01") )
       All_DF
    }
     

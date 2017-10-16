@@ -40,8 +40,8 @@ import org.apache.spark.ml.PipelineModel
 
 
 object count_fraud_Ratio {
-    val startdate = "20160930"
-    val enddate = "20160930"
+    val startdate = "20160901"
+    val enddate = "20160905"
     val rangedir = IntelUtil.varUtil.rangeDir 
     val usedArr_filled = IntelUtil.constUtil.usedArr.map{x => x + "_filled"}
     
@@ -79,14 +79,14 @@ object count_fraud_Ratio {
  
     val startTime = System.currentTimeMillis(); 
     
-    save_fraudType_1(ss)
+    count_Ratio(ss)
    
     
      
   }
     
     
-    def save_fraudType_1(ss: SparkSession): Unit ={
+    def count_Ratio(ss: SparkSession): Unit ={
         var fraud_join_Data = IntelUtil.get_from_HDFS.get_fraud_join_DF(ss, startdate, enddate).persist(StorageLevel.MEMORY_AND_DISK_SER)
         var fraudType_infraud = fraud_join_Data.filter(fraud_join_Data("fraud_tp")=== fraudType) 
         var cnt = fraudType_infraud.count()
@@ -94,15 +94,40 @@ object count_fraud_Ratio {
 //        var fraud_ratio = 80000000/(cnt/7)
 //        println("approximate weika fraud_ratio: ", fraud_ratio)
         
-        var AllData = IntelUtil.get_from_HDFS.get_filled_DF(ss, startdate, enddate).repartition(1000)
+        var AllData = IntelUtil.get_from_HDFS.get_origin_DF(ss, startdate, enddate).repartition(1000)
         var all_cnt = AllData.count
         println("all_cnt: ", all_cnt)   //192623
         
         
-        var real_ratio = all_cnt/cnt
-        println("Real weika fraud_ratio: ", real_ratio)   //9月1~7号  192623      9月30号147128
+        val weika_chnl_list = Array("05","07","08","11","14","17","20","23","01","03")
+        val Data_same_chnl  = AllData.filter(AllData("trans_chnl").isin(weika_chnl_list:_*))
+        val Data_same_chnl_cnt = Data_same_chnl.count
+        println("Data_same_chnl count: ", Data_same_chnl_cnt)   
+        
+        var real_ratio = Data_same_chnl_cnt/cnt
+        println("Real weika fraud_ratio: ", real_ratio)   //9月1~5号  
+        
+          
          
     }
     
-     
+    //统计伪卡欺诈交易渠道 
+    //select distinct(trans_chnl) from tbl_arsvc_fraud_trans where fraud_tp='04' and trans_dt>='20160901' and trans_dt<='20161101';
+    //"05","07","08","11","14","17","20","23","01","03"
+    
+    
+ // select card_attr,  count(*) from tbl_arsvc_fraud_trans where fraud_tp='04' and trans_dt>='20160901' and trans_dt<='20160930' group by card_attr;   
+//伪卡 卡属性    
+//01      1114
+//02      3262
+//03      263
+    
+  //select card_attr, count(*) from tbl_common_his_trans where pdate>='20160901' and pdate<='20160901'  group by card_attr;  
+    
+//        58629
+//01      62525802
+//02      26970942
+//03      1255934
+//05      558
+
 }

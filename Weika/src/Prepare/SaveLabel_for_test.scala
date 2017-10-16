@@ -46,7 +46,7 @@ object SaveLabel_for_test {
     val usedArr_filled = IntelUtil.constUtil.usedArr.map{x => x + "_filled"}
     
     //可以调整
-    val sample_cards_ratio = 0.005
+    val sample_cards_ratio = 0.0005
     val TF_ratio = 1000
     val fraudType = "04"
        
@@ -73,6 +73,7 @@ object SaveLabel_for_test {
       .appName("Save_IndexerPipeLine")
       .config("spark.sql.warehouse.dir", warehouseLocation)
       .config("hive.metastore.schema.verification", false)
+      .config("spark.driver.maxResultSize", "10g")
       .config("spark.debug.maxToStringFields",500)
       .getOrCreate()
   
@@ -90,18 +91,21 @@ object SaveLabel_for_test {
 //    
 //    save_Alldata_bycards_3(ss)
 //    println("step3 done in " + (System.currentTimeMillis()-startTime)/(1000*60) + " minutes." )
-//    
-//    save_labeled_new_4(ss)
-//    println("step4 done in " + (System.currentTimeMillis()-startTime)/(1000*60) + " minutes." )
-//    
-//    save_FE_5(ss)
-//    println("step5 done in " + (System.currentTimeMillis()-startTime)/(1000*60) + " minutes." )
-//    
+    
+    save_labeled_new_4(ss)
+    println("step4 done in " + (System.currentTimeMillis()-startTime)/(1000*60) + " minutes." )
+    
+    save_FE_5(ss)
+    println("step5 done in " + (System.currentTimeMillis()-startTime)/(1000*60) + " minutes." )
+    
 //    drop_confuse_6(ss)
 //    println("step6 done in " + (System.currentTimeMillis()-startTime)/(1000*60) + " minutes." )
-    
-      save_train_test_7(ss)
-      println("step7 done in " + (System.currentTimeMillis()-startTime)/(1000*60) + " minutes." )
+//    
+//      save_train_test_7(ss)
+//      println("step7 done in " + (System.currentTimeMillis()-startTime)/(1000*60) + " minutes." )
+//      
+//      drop_FE_test_8(ss)
+//      println("step8 done in " + (System.currentTimeMillis()-startTime)/(1000*60) + " minutes." )
     
   }
     
@@ -141,7 +145,7 @@ object SaveLabel_for_test {
   
         val All_sample_cards = AllData.sample(false, sample_ratio, 0).select("pri_acct_no_conv").distinct()//.persist(StorageLevel.MEMORY_AND_DISK_SER) 
         
-        All_sample_cards.rdd.map(r=>r.getString(0)).coalesce(1).saveAsTextFile(rangedir + "All_sample_cards")
+        All_sample_cards.rdd.map(r=>r.getString(0)).saveAsTextFile(rangedir + "All_sample_cards")
     }
     
     def save_Alldata_bycards_3(ss: SparkSession): Unit ={
@@ -150,11 +154,11 @@ object SaveLabel_for_test {
         var fraudType_cards_num = fraudType_cards.count()
         println("fraudType_cards_num :", fraudType_cards_num)
         
-        var normal_cards_num = fraudType_cards_num * TF_ratio
+        //var normal_cards_num = fraudType_cards_num * TF_ratio
         
-        val All_sample_cards = sc.textFile(rangedir + "All_sample_cards")
+        val All_sample_cards = sc.textFile(rangedir + "All_sample_cards").sample(false,0.05)
         var All_sample_cards_num = All_sample_cards.count()
-        println("All_sample_cards_num :", All_sample_cards)
+        println("All_sample_cards_num :", All_sample_cards_num )
         
   
         import ss.implicits._
@@ -165,15 +169,15 @@ object SaveLabel_for_test {
         println(all_cards_list.size)
         
         
-        var AllData_1 = IntelUtil.get_from_HDFS.get_filled_DF(ss, "20161001", "20161031").repartition(1000) 
+        var AllData_1 = IntelUtil.get_from_HDFS.get_filled_DF(ss, "20161001", "20161031").repartition(5000) 
         val Alldata_by_cards_1 = AllData_1.filter(AllData_1("pri_acct_no_conv").isin(all_cards_list:_*))
         Alldata_by_cards_1.selectExpr(usedArr_filled:_*).rdd.map(_.mkString(",")).saveAsTextFile(rangedir + "Alldata_by_cards_1")
         
-        var AllData_2 = IntelUtil.get_from_HDFS.get_filled_DF(ss, "20161101", "20161130").repartition(1000) 
+        var AllData_2 = IntelUtil.get_from_HDFS.get_filled_DF(ss, "20161101", "20161130").repartition(5000) 
         val Alldata_by_cards_2 = AllData_2.filter(AllData_2("pri_acct_no_conv").isin(all_cards_list:_*))
         Alldata_by_cards_2.selectExpr(usedArr_filled:_*).rdd.map(_.mkString(",")).saveAsTextFile(rangedir + "Alldata_by_cards_2")
         
-        var AllData_3 = IntelUtil.get_from_HDFS.get_filled_DF(ss, "20161201", "20161231").repartition(1000) 
+        var AllData_3 = IntelUtil.get_from_HDFS.get_filled_DF(ss, "20161201", "20161231").repartition(5000) 
         val Alldata_by_cards_3 = AllData_3.filter(AllData_3("pri_acct_no_conv").isin(all_cards_list:_*))
         Alldata_by_cards_3.selectExpr(usedArr_filled:_*).rdd.map(_.mkString(",")).saveAsTextFile(rangedir + "Alldata_by_cards_3")
         
@@ -200,6 +204,8 @@ object SaveLabel_for_test {
         val sample_cards= sc.textFile(rangedir + "All_sample_cards").cache
         val all_cards = sample_cards.union(fraudType_cards)
         val all_cards_list = all_cards.collect()
+        
+        println("all_cards_list done")
        
         var Alldata_by_cards_dir_1 = rangedir + "Alldata_by_cards_1"
         var Alldata_by_cards_filled_1 = IntelUtil.get_from_HDFS.get_processed_DF(ss, Alldata_by_cards_dir_1)
@@ -386,6 +392,24 @@ object SaveLabel_for_test {
 //     (fine_N: ,29781145)
 //(trainFraud: ,16607,testFraud: ,355)
 //(trainNormal: ,1489925,testNormal: ,28291220)
+    }
+   
+   
+    def drop_FE_test_8(ss: SparkSession ): Unit ={
+     val sc = ss.sparkContext
+     var FE_Data = IntelUtil.get_from_HDFS.get_FE_DF(ss, rangedir + "FE_test_data").persist(StorageLevel.MEMORY_AND_DISK_SER)
+     
+     val label= "label" 
+     val cardcol= "pri_acct_no_conv"
+    
+     var Fraud = FE_Data.filter(FE_Data("label")===1)
+     Fraud = Fraud.sample(false, 0.57)
+       
+     val Normal = FE_Data.filter(FE_Data("label")===0)
+       
+     val test_data = Fraud.union(Normal)
+     test_data.rdd.map(_.mkString(",")).saveAsTextFile(rangedir + "FE_test_data_new")
+      
     }
   
 }
