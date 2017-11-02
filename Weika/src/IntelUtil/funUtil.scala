@@ -220,6 +220,13 @@ object funUtil {
   }
   
   
+//固定覆盖率    一系列密密麻麻的，选最接近的  
+//  import org.apache.spark.mllib.evaluation.BinaryClassificationMetrics
+//     val metrics = new BinaryClassificationMetrics(scoreAndLabels)
+//     val v1=metrics.pr().filter(f=> f._1<=0.75).sortBy(f=>f._1, false, 1).first()
+//     val v2=metrics.pr().filter(f=> f._1<=0.50).sortBy(f=>f._1, false, 1).first()
+//     val v3=metrics.pr().filter(f=> f._1<=0.25).sortBy(f=>f._1, false, 1).first()
+
   
   
 }
