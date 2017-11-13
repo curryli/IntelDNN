@@ -47,7 +47,7 @@ import org.apache.spark.ml.feature.ChiSqSelectorModel
 
 
 
-object Read_FE_GBDT {
+object Read_FE_cert {
 
   
    val catgory_many_list = Array("mchnt_cd", "card_accprt_nm_loc","term_cd","auth_id_resp_cd")
@@ -85,8 +85,7 @@ object Read_FE_GBDT {
  
     val train_ori_df = ss.read.option("header", true).format("csv").option("inferSchema","true").load("xrli/credit/train_trans_encrypt.csv")
     val test_ori_df = ss.read.option("header", true).format("csv").option("inferSchema","true").load("xrli/credit/test_trans_encrypt.csv")
-    
- 
+     
     var Trans_ori_df =  train_ori_df.unionAll(test_ori_df)
     
 //    Trans_ori_df = Trans_ori_df.sample(false, 0.001)
@@ -146,7 +145,7 @@ object Read_FE_GBDT {
     println(train_arr.mkString(","))
     
     new_labeled = new_labeled.na.fill(-1)
-    new_labeled.show(100)
+    new_labeled.show(5)
     
     val udf_replaceEmpty = udf[String, String]{xstr => 
     
@@ -163,10 +162,7 @@ object Read_FE_GBDT {
       result
      }
       
-      
        
-   
-     
      for(oldcol <- Arr_to_idx){
         val newcol = oldcol + "_filled" 
        new_labeled = new_labeled.withColumn(newcol, udf_replaceEmpty(new_labeled(oldcol)))
@@ -180,72 +176,41 @@ object Read_FE_GBDT {
     println("idx done in " + (System.currentTimeMillis()-startTime)/(1000*60) + " minutes." )    
     
     idxedData = idxedData.drop("Trans_at")
-    
-    
-    idxedData.show(5)
      
-    idxedData = idxedData.filter(idxedData("label")===0 || idxedData("label")===1 )
-    
-    
+    //idxedData.show(5)
+      
+     
    //////////////////////////////////////////save//////////////////////////////////////// 
     println(idxedData.columns.mkString(","))
     //idxedData.dtypes.foreach(println)
         
-    val save_DF = idxedData.selectExpr(save_arr:_*)
-    save_DF.columns.mkString(",").foreach(println)
+    var save_DF = idxedData.selectExpr(save_arr:_*)
+
+    
+    
+//    var stat_df = ss.read.option("header", true).format("csv").option("inferSchema","true").load("xrli/credit/stat_DF.csv")
+//    stat_df = stat_df.drop("label")
+//    stat_df.show(5)
+//    
+//    save_DF = save_DF.join(stat_df, save_DF("certid")===stat_df("certid_stat"), "left_outer").drop("certid_stat")
+    
+    //save_DF.show(5)
+    
+    println(save_DF.columns.mkString(","))
         
-    save_DF.rdd.map(_.mkString(",")).saveAsTextFile("xrli/credit/cert_FE_nolabel")
+    save_DF.rdd.map(_.mkString(",")).saveAsTextFile("xrli/credit/cert_all_right")
     
     println("save done in " + (System.currentTimeMillis()-startTime)/(1000*60) + " minutes." ) 
      ////////////////////////////////////////////////////////////////////////////////////////// 
    
- ////////////////////////////////////
-        
+  
+ 
+    println("All done in " + (System.currentTimeMillis()-startTime)/(1000*60) + " minutes." ) 
     
-//     
-//    val assembler = new VectorAssembler()
-//      .setInputCols(train_arr)
-//      .setOutputCol("featureVector")
-//    
-//    val label_indexer = new StringIndexer()
-//     .setInputCol("label")
-//     .setOutputCol("label_idx")
-//     .fit(idxedData)  
-//       
-//      
-//     val Array(trainingData, testData) = idxedData.randomSplit(Array(0.8, 0.2))
-//          
-//     var gbtClassifier = new GBTClassifier()
-//        .setLabelCol("label_idx")
-//        .setFeaturesCol("featureVector")
-//        .setMaxIter(500)
-//        .setMaxDepth(5) //GDBT中的决策树要设置浅一些
-//        .setStepSize(0.1)//范围是(0, 1]
-//        .setMaxBins(1000000)
-//     
-//      
-//      val pipeline2 = new Pipeline().setStages(Array(assembler,label_indexer, gbtClassifier))
-//      
-//      val model = pipeline2.fit(trainingData)
-//        
-//       
-//     
-//       
-//      val predictionResultDF = model.transform(testData)
-//        
-//      val eval_result = IntelUtil.funUtil.get_CF_Matrix(predictionResultDF)
-//       
-//     println("Current Precision_P is: " + eval_result.Precision_P)
-//     println("Current Recall_P is: " + eval_result.Recall_P)
-//     
-//     
-// 
-//    println("All done in " + (System.currentTimeMillis()-startTime)/(1000*60) + " minutes." ) 
-//    
-//    
-//    
-//    
-//    
+    
+    
+    
+    
      
   }
   

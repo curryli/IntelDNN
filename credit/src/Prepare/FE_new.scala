@@ -105,7 +105,7 @@ object FE_new {
     labeledData = labeledData.withColumn("day_week", get_day_week(labeledData("Settle_dt")))
     labeledData = labeledData.withColumn("is_weekend", is_weekend(labeledData("day_week")))
            
-    val get_hour = udf[Int, String]{xstr => xstr.substring(4,6).toInt }
+    val get_hour = udf[Int, String]{xstr => xstr.reverse.substring(4,6).reverse.toInt }
     labeledData = labeledData.withColumn("hour", get_hour(labeledData("Trans_tm")))
     
      
@@ -442,9 +442,7 @@ object FE_new {
     labeledData = labeledData.withColumn("hist_max_amt", max("RMB").over(W_hist))  
     labeledData = labeledData.withColumn("hist_min_amt", min("RMB").over(W_hist)) 
     labeledData = labeledData.withColumn("hist_avg_amt", avg("RMB").over(W_hist)) 
-    labeledData = labeledData.withColumn("hist_fraud_cnt", sum(when(labeledData("label").===("1"), 1).otherwise(0)).over(W_hist)) //除当日外历史所有被标记伪卡欺诈的次数
-    
-    
+     
        //除当日外历史所有无交易记录标志
     labeledData = labeledData.withColumn("hist_no_trans", when(labeledData("hist_tot_cnt") === 0,1).otherwise(0))  
     
