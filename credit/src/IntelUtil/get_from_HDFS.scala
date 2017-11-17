@@ -225,15 +225,33 @@ object get_from_HDFS {
        
        val Row_RDD = sc.textFile(input_dir).map{str=>
            var tmparr = str.split(",")      
-           var tmpList = List(tmparr(0).toString()).:+(tmparr(1).toString)
-           for(i<- 2 to tmparr.length-1){
-             tmpList = tmpList.:+(tmparr(i).toString)
+           var tmpList = List(tmparr(0).toDouble).:+(tmparr(1).toString).:+(tmparr(2).toString)
+           for(i<- 3 to tmparr.length-1){
+             tmpList = tmpList.:+(tmparr(i).toDouble)
            }   
            
            
            Row.fromSeq(tmpList.toSeq)
        }
-       var DF_schema_used = ss.createDataFrame(Row_RDD, funUtil.get_schema(constUtil.FE_head))
+       var DF_schema_used = ss.createDataFrame(Row_RDD, constUtil.schema_cert)
+       DF_schema_used
+    }    
+   
+   
+   def get_agg_DF(ss: SparkSession, input_dir: String):DataFrame = {
+       val sc = ss.sparkContext
+       
+       val Row_RDD = sc.textFile(input_dir).map{str=>
+           var tmparr = str.split(",")      
+           var tmpList = List(tmparr(0).toString).:+(tmparr(1).toString).:+(tmparr(2).toString).:+(tmparr(3).toDouble)
+           for(i<- 4 to tmparr.length-1){
+             tmpList = tmpList.:+(tmparr(i).toDouble)
+           }   
+           
+           
+           Row.fromSeq(tmpList.toSeq)
+       }
+       var DF_schema_used = ss.createDataFrame(Row_RDD, constUtil.schema_cert)
        DF_schema_used
     }    
          
