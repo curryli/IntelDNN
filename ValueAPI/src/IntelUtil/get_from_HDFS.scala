@@ -24,11 +24,14 @@ object get_from_HDFS {
     var All_DF: DataFrame = null
     //until和Range是左闭右开，1是包含的，10是不包含。而to是左右都包含。  for(i <- 0 until 10);  var r = Range(1,10,2);  默认步长1
     
-    var start = constUtil.date_to_num_Map(startdate)
-    var end = constUtil.date_to_num_Map(enddate)
+    val date_to_num_Map = funUtil.Date_idx_Map(startdate, enddate)
+    val dateMap = funUtil.idx_Date_Map(startdate, enddate)
+     
+    var start = date_to_num_Map(startdate)
+    var end = date_to_num_Map(enddate)
     
     for(i <- start to end) {
-       val filename = "/user/hddtmn/in_common_his_trans/" + constUtil.dateMap(i) + "_correct"
+       val filename = "/user/hddtmn/in_common_his_trans/" + dateMap(i) + "_correct"
        //println(filename)
        val tmpRdd = sc.textFile(filename).map{str=>
            var tmparr = str.split("\",\"")         
@@ -38,7 +41,7 @@ object get_from_HDFS {
    
        var tmp_DF = ss.createDataFrame(tmpRdd, constUtil.schema_251)
     
-       val udf_pdate = udf[String, String]{xstr => constUtil.dateMap(i)}
+       val udf_pdate = udf[String, String]{xstr =>  dateMap(i)}
        tmp_DF = tmp_DF.withColumn("pdate", udf_pdate(tmp_DF("pri_key")))   //随便找一个变量进行udf"pri_key"
        //tmp_DF.show(5)
        if(i==start)
@@ -46,7 +49,9 @@ object get_from_HDFS {
        else
          All_DF = All_DF.unionAll(tmp_DF)
     } 
-       All_DF
+       
+      //All_DF =  All_DF.filter(All_DF("card_attr").=!=("01") )
+      All_DF
    }
     
   
@@ -146,11 +151,14 @@ object get_from_HDFS {
            tmparr = tmparr.map { x => x.toString()}    
            Row.fromSeq(tmparr.toSeq)
        }
-       var DF_schema_used = ss.createDataFrame(Row_RDD, IntelUtil.constUtil.schema_used)
+       
+       val usedArr_filled =  constUtil.usedArr.map{x => x + "_filled"}
+       var DF_schema_used = ss.createDataFrame(Row_RDD, funUtil.get_schema(usedArr_filled))
        DF_schema_used
     }
     
-     def get_labeled_DF(ss: SparkSession, input_dir: String):DataFrame = {
+       
+    def get_labeled_DF(ss: SparkSession, input_dir: String):DataFrame = {
        val sc = ss.sparkContext
        
        val Row_RDD = sc.textFile(input_dir).map{str=>
@@ -158,7 +166,7 @@ object get_from_HDFS {
           //.:+ 是添加在尾部，  .+:是添加在头部
            var day_week = funUtil.dayForWeek("2016" + tmparr(1).substring(0,4))
            var hour = tmparr(1).substring(4,6)
-           var tmpList = List(tmparr(0).toString()).:+(tmparr(1).toString).:+(day_week.toDouble).:+(hour.toDouble).:+(tmparr(2).toDouble).:+(tmparr(3).toDouble)
+           var tmpList = List(tmparr(0).toString()).:+(tmparr(1).toString).:+(day_week.toString).:+(hour.toString).:+(tmparr(2).toString).:+(tmparr(3).toString)
            for(i<- 4 to tmparr.length-1){
              tmpList = tmpList.:+(tmparr(i).toString())
            }
@@ -167,36 +175,69 @@ object get_from_HDFS {
        }
        
        println("Row_RDD done")
-       var DF_schema_labeled = ss.createDataFrame(Row_RDD, IntelUtil.constUtil.schema_labeled)
+       var DF_schema_labeled = ss.createDataFrame(Row_RDD, funUtil.get_schema(constUtil.labeledArr))
+       //var DF_schema_labeled = ss.createDataFrame(Row_RDD, funUtil.get_schema(constUtil.Labeled_All_Arr))
        DF_schema_labeled
-    }
-        
+    }     
      
-//     def get_DF_by_transid(ss: SparkSession, input_dir: String):DataFrame = {
-//       val alldata = get_labeled_DF(ss, input_dir)
-//       alldata
-//     }
-     
-      def get_labeled_noNAN(ss: SparkSession, input_dir: String):DataFrame = {
-       val sc = ss.sparkContext
-       
-       var labeledData = IntelUtil.get_from_HDFS.get_labeled_DF(ss, input_dir).cache         //.persist(StorageLevel.MEMORY_AND_DISK_SER)//
-       labeledData = labeledData.drop(constUtil.NAN_Arr:_*)
-       
-       labeledData
-    }
-     
-      
-     def get_indexed_DF(ss: SparkSession, input_dir: String):DataFrame = {
+ 
+   def get_Labeled_All(ss: SparkSession, input_dir: String):DataFrame = {
        val sc = ss.sparkContext
        
        val Row_RDD = sc.textFile(input_dir).map{str=>
-           var tmparr = str.split(",")         
-           tmparr = tmparr.map { x => x.toString()}    
-           Row.fromSeq(tmparr.toSeq)
+           var tmparr = str.split(",")
+          //.:+ 是添加在尾部，  .+:是添加在头部
+           var tmpList = List(tmparr(0).toString()) 
+           for(i<- 1 to tmparr.length-1){
+             tmpList = tmpList.:+(tmparr(i).toString())
+           }
+             
+           Row.fromSeq(tmpList.toSeq)
        }
-       var DF_schema_used = ss.createDataFrame(Row_RDD,  funUtil.get_schema(constUtil.indexed_Arr))
+       println("get_Labeled_All: Row_RDD done.")
+       var DF_schema_labeled = ss.createDataFrame(Row_RDD, funUtil.get_schema(constUtil.Labeled_All_Arr))
+       DF_schema_labeled
+    }     
+    
+    
+ 
+   
+   def get_indexed_DF(ss: SparkSession, input_dir: String):DataFrame = {
+       val sc = ss.sparkContext
+       
+       val Row_RDD = sc.textFile(input_dir).map{str=>
+           var tmparr = str.split(",")      
+           
+           var tmpList = List(tmparr(0).toString()).:+(tmparr(1).toDouble)//.:+(tmparr(2).toDouble)//.:+(tmparr(3).toDouble).:+(tmparr(4).toDouble).:+(tmparr(5).toDouble)
+
+           for(i<- 2 to tmparr.length-1){
+             tmpList = tmpList.:+(tmparr(i).toDouble)
+           }   
+           
+           
+           Row.fromSeq(tmpList.toSeq)
+       }
+       var DF_schema_used = ss.createDataFrame(Row_RDD, constUtil.schema_labeled)
        DF_schema_used
     }
-    
+   
+   
+   
+   def get_FE_DF(ss: SparkSession, input_dir: String):DataFrame = {
+       val sc = ss.sparkContext
+       
+       val Row_RDD = sc.textFile(input_dir).map{str=>
+           var tmparr = str.split(",")      
+           var tmpList = List(tmparr(0).toString()).:+(tmparr(1).toString)
+           for(i<- 2 to tmparr.length-1){
+             tmpList = tmpList.:+(tmparr(i).toString)
+           }   
+           
+           
+           Row.fromSeq(tmpList.toSeq)
+       }
+       var DF_schema_used = ss.createDataFrame(Row_RDD, funUtil.get_schema(constUtil.FE_head))
+       DF_schema_used
+    }    
+         
 }
