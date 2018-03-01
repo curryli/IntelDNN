@@ -12,13 +12,14 @@ import org.apache.spark.graphx._
 import org.apache.spark.sql.functions._
 
 
-object get_from_HDFS { 
+object get_from_HDFS{ 
   def main(args: Array[String]) { 
   
   }
     
      
   def get_origin_DF(ss: SparkSession, startdate:String, enddate:String):DataFrame = {
+    //@transient //这句话不加可能会报错： Task not serializable:。。。  http://blog.csdn.net/javastart/article/details/51206715
     val sc = ss.sparkContext
     
     var All_DF: DataFrame = null

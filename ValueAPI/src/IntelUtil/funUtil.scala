@@ -50,7 +50,7 @@ import java.util.Date;
 import java.util.List;
 import scala.collection.mutable.Map
 
-object funUtil { 
+object funUtil{ 
   
   def main(args: Array[String]) { 
     println(dayForWeek("20161001"))

@@ -58,7 +58,7 @@ object QRcode {
  
     val rangedir = IntelUtil.varUtil.rangeDir 
   
-    var filledData = IntelUtil.get_from_HDFS.get_filled_DF(ss, "20171201", "20171201")
+    var filledData = IntelUtil.get_from_HDFS.get_filled_DF(ss, "20171101", "20180131")
 //    println("filledData count:" + filledData.count())
     
      //获取交易金额 （元）
@@ -112,7 +112,11 @@ object QRcode {
     println("calculate done in " + (System.currentTimeMillis()-startTime)/(1000*60) + " minutes." )   
     
     
-    QR_cnt_DF.filter(QR_cnt_DF("QR_cnt")>0).show(100)
+    QR_cnt_DF = QR_cnt_DF.filter(QR_cnt_DF("QR_cnt")>0) 
+    
+    QR_cnt_DF.columns.foreach {println}
+    
+    QR_cnt_DF.rdd.map(_.mkString(",")).saveAsTextFile("xrli/CardholderTag/ValueAPI_QRCode")
     
     QR_cnt_DF.unpersist(blocking=false)
     
@@ -120,6 +124,6 @@ object QRcode {
   }
   
   
-
+//pri_acct_no_conv,QR_cnt,QR_cnt_ratio,QR_avg_RMB,QR_date_cnt,QR_mcc_tps
     
 }
