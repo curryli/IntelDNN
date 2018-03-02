@@ -17,7 +17,7 @@ import org.apache.spark.ml.classification._
 import org.apache.spark.storage.StorageLevel
 import scala.reflect.ClassTag
 
-object metroPay {
+object metroPayStat {
     val startdate = IntelUtil.varUtil.startdate
     val enddate = IntelUtil.varUtil.enddate
    
@@ -38,50 +38,28 @@ object metroPay {
     Logger.getLogger("hive").setLevel(Level.WARN);
     Logger.getLogger("parse").setLevel(Level.ERROR); 
     
-    //val sparkConf = new SparkConf().setAppName("spark2SQL")
-    val warehouseLocation = "spark-warehouse"
+    Logger.getLogger("org.apache.spark").setLevel(Level.WARN)
+    Logger.getLogger("org.eclipse.jetty.server").setLevel(Level.OFF)
     
-    val ss = SparkSession
-      .builder()
-      .appName("Save_IndexerPipeLine")
-      .config("spark.sql.warehouse.dir", warehouseLocation)
-      .config("hive.metastore.schema.verification", false)
-      //.config("spark.serializer", "org.apache.spark.serializer.KryoSerializer")
-      .getOrCreate()
-  
+    val ss = SparkSession.builder().appName("DataSet basic example").appName("Dataset example").getOrCreate()
+ 
+   // For implicit conversions like converting RDDs to DataFrames
     import ss.implicits._
-    import ss.sql
-    
     val sc = ss.sparkContext
     val sqlContext = new org.apache.spark.sql.SQLContext(sc)
- 
     val startTime = System.currentTimeMillis(); 
  
-    val rangedir = IntelUtil.varUtil.rangeDir 
-  
-    var filledData = IntelUtil.get_from_HDFS.get_filled_DF(ss, "20171101", "20180131")//.persist(StorageLevel.MEMORY_AND_DISK_SER)  
-    //filledData.columns.foreach {println}
-    //println("filledData count:" + filledData.count())
-    
-    val metro_mchnts = Array("102330141110001","301330141110002","301330141110003","833331041110001","898330141110016","898330141110022","83334754111ZA01","301330141110010",
-        "301330141110009","301330141110012","301330141110005","898330141110019","301330141110006","301330141110004","301330141110007","301330141110008","898330141110030")
-    
-    var metroData = filledData.filter(filledData("mchnt_cd_filled").isin(metro_mchnts:_*))//.persist(StorageLevel.MEMORY_AND_DISK_SER) 
-    //println("metroData count:" + metroData.count()) 
-
-    
-    var metro_cards = metroData.select("pri_acct_no_conv").distinct()//.map(f=>f.getString(0))//.persist(StorageLevel.MEMORY_AND_DISK_SER) 
-    //metro_cards.columns.foreach {println}
-    //println("metro_cards count:" + metro_cards.count())
-    //metroData.unpersist(blocking=false)
-        
-    var metro_related_Data = filledData.join(metro_cards, Seq("pri_acct_no_conv"), "leftsemi")//.persist(StorageLevel.MEMORY_AND_DISK_SER) 
-    //metro_cards.unpersist(blocking=false)
-    //println("metro_related_Data count:" + metro_related_Data.count())
-    
+    //读文件
+    val metro_related_read = ss.read.text("xrli/CardholderTag/metro_related_Data").as[String]
+    var metro_related_RDD = metro_related_read.map(line =>
+       if(line.split(',').length==5)
+        (line.split(',')(0), line.split(',')(1).toDouble, line.split(',')(2), line.split(',')(3), line.split(',')(4))
+       else
+        (line.split(',')(0), 0.0, "", "", "")
+    )
      
-    metro_related_Data.selectExpr("pri_acct_no_conv","trans_at", "tfr_dt_tm", "ext_extend_inf_28","mchnt_tp").rdd.map(_.mkString(",")).saveAsTextFile("xrli/CardholderTag/metro_related_Data")
-     
+    var metro_related_Data = metro_related_RDD.toDF("pri_acct_no_conv", "trans_at", "tfr_dt_tm","ext_extend_inf_28", "mchnt_tp").persist(StorageLevel.MEMORY_AND_DISK_SER) 
+      
       
      //获取交易金额 （元）
     println("RMB")

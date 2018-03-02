@@ -38,7 +38,7 @@ object FilterMetro {
  
  
     //读文件
-    val metro_related_data = ss.read.text("xrli/CardholderTag/metro_related_Data2").as[String]
+    val metro_related_data = ss.read.text("xrli/CardholderTag/metro_related_Data").as[String]
  
     val metro_relatedRDD = metro_related_data.map(line =>
        if(line.split(',').length==5)
@@ -73,7 +73,7 @@ object FilterMetro {
     val All_SF_DF = metro_related_DF.filter(metro_related_DF("is_QR").===(1.0))
     
     //////////////////////////////////////////
-    val metro_stat_data = ss.read.text("xrli/CardholderTag/ValueAPI_Metro2").as[String]
+    val metro_stat_data = ss.read.text("xrli/CardholderTag/ValueAPI_Metro").as[String]
  
     val metro_statRDD = metro_stat_data.map(line => (line.split(',')(0), line.split(',')(1).toInt, line.split(',')(2).toDouble, line.split(',')(3).toDouble,
      line.split(',')(4).toInt, line.split(',')(5).toInt))
@@ -81,8 +81,9 @@ object FilterMetro {
     val metro_stat_DF = metro_statRDD.toDF("card", "QR_cnt", "QR_cnt_ratio","QR_avg_RMB", "QR_date_cnt", "QR_mcc_tps").persist(StorageLevel.MEMORY_AND_DISK_SER) 
      
     //val Metro_valuable_stat = metro_stat_DF.filter(metro_stat_DF("QR_cnt")>=15 && metro_stat_DF("QR_cnt_ratio")>=0.5 && metro_stat_DF("QR_avg_RMB")>=100 && metro_stat_DF("QR_date_cnt")>=10 && metro_stat_DF("QR_mcc_tps")>=3).persist(StorageLevel.MEMORY_AND_DISK_SER) 
-    val Metro_valuable_stat = metro_stat_DF.filter(metro_stat_DF("QR_cnt")>=1 && metro_stat_DF("QR_cnt_ratio")>=0.5 && metro_stat_DF("QR_avg_RMB")>=100 && metro_stat_DF("QR_date_cnt")>=1 && metro_stat_DF("QR_mcc_tps")>=3).persist(StorageLevel.MEMORY_AND_DISK_SER) 
-      
+    //val Metro_valuable_stat = metro_stat_DF.filter(metro_stat_DF("QR_cnt")>=1 && metro_stat_DF("QR_cnt_ratio")>=0.5 && metro_stat_DF("QR_avg_RMB")>=100 && metro_stat_DF("QR_date_cnt")>=1 && metro_stat_DF("QR_mcc_tps")>=3).persist(StorageLevel.MEMORY_AND_DISK_SER) 
+    val Metro_valuable_stat = metro_stat_DF.filter(metro_stat_DF("QR_cnt")>=10 && metro_stat_DF("QR_cnt")<=1000 && metro_stat_DF("QR_cnt_ratio")>=0.3 && metro_stat_DF("QR_avg_RMB")>=100 && metro_stat_DF("QR_date_cnt")>=5 && metro_stat_DF("QR_mcc_tps")>=3).persist(StorageLevel.MEMORY_AND_DISK_SER) 
+        
     
     //所有卡号个数
     val all_cards_cnt = metro_related_DF.select("card").distinct().count()
@@ -126,13 +127,15 @@ object FilterMetro {
     //所有闪付交易中，每种闪付交易的类型分布
     println("All_SF_DF distribute: ")
     All_SF_DF.createOrReplaceTempView("All_SF_TB")
-    sqlContext.sql("select pay_tp,count(*) from (select ext_extend_inf_28 as pay_tp from All_SF_TB where ext_extend_inf_28>='1' and ext_extend_inf_28<='9')A group by pay_tp").show
-    
+    //sqlContext.sql("select pay_tp,count(*) from (select ext_extend_inf_28 as pay_tp from All_SF_TB where ext_extend_inf_28>='1' and ext_extend_inf_28<='9')A group by pay_tp").show
+    sqlContext.sql("select pay_tp,count(*) from (select ext_extend_inf_28 as pay_tp from All_SF_TB)A group by pay_tp").show
+
     
     //所有优质卡号的闪付交易中，每种闪付交易的类型分布
     println("all_val_SF_DF distribute:")
     all_val_SF_DF.createOrReplaceTempView("all_val_SF_TB")
-    sqlContext.sql("select pay_tp,count(*) from (select ext_extend_inf_28 as pay_tp from all_val_SF_TB where ext_extend_inf_28>='1' and ext_extend_inf_28<='9')A group by pay_tp").show
+    //sqlContext.sql("select pay_tp,count(*) from (select ext_extend_inf_28 as pay_tp from all_val_SF_TB where ext_extend_inf_28>='1' and ext_extend_inf_28<='9')A group by pay_tp").show
+    sqlContext.sql("select pay_tp,count(*) from (select ext_extend_inf_28 as pay_tp from all_val_SF_TB)A group by pay_tp").show
     
     
   }
