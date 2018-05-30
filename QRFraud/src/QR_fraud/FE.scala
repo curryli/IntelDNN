@@ -34,8 +34,8 @@ import org.apache.spark.sql.types.DoubleType
 import org.apache.spark.sql._
 import org.apache.spark.sql.types._
 import org.apache.spark.sql.functions._
-
-
+import org.apache.spark.mllib.linalg.Vectors  
+import org.apache.spark.ml.evaluation.BinaryClassificationEvaluator
 import getdata.get_from_hive
 
 
@@ -77,6 +77,7 @@ object FE {
  
      for(oldcol <- DisperseArr){
         val newcol = oldcol + "_filled" 
+        println(oldcol , " count: ", data_division.select(oldcol).distinct().count())
         data_division = data_division.withColumn(newcol, udf_replaceEmpty(data_division(oldcol)))
      }
       
@@ -130,26 +131,32 @@ object FE {
     var normal_test = data_division.filter(data_division("division")=== "normal_test")
     var fraud_train = data_division.filter(data_division("division")=== "fraud_train")
     var fraud_test = data_division.filter(data_division("division")=== "fraud_test")
-  
-     
+   
+    val trainingData = normal_train.sample(false, 0.005).unionAll(fraud_train).cache
+    val testData = normal_test.unionAll(fraud_test).cache
+    
     data_division.unpersist(blocking=false)
     
-    val trainingData = normal_train.sample(false, 0.01).unionAll(fraud_train)
-    val testData = normal_test.unionAll(fraud_test)
+    println("trainingData.count: ", trainingData.count, " testData.count: ", testData.count)
     
+    
+//    trainingData.selectExpr(used_arr.+:("label_idx"):_*).rdd.map(_.mkString(",")).saveAsTextFile("xrli/QRfraud/trainingData")
+//    testData.selectExpr(used_arr.+:("label_idx"):_*).rdd.map(_.mkString(",")).saveAsTextFile("xrli/QRfraud/testData")
+    
+     
+    println("Save done in " + (System.currentTimeMillis()-startTime)/(1000*60) + " minutes." )  
     
     val rfClassifier = new RandomForestClassifier()
         .setLabelCol("label_idx")
         .setFeaturesCol("featureVector")
-        .setNumTrees(200)
+        .setNumTrees(50)
         .setSubsamplingRate(0.7)
         .setFeatureSubsetStrategy("auto")
-        .setThresholds(Array(10,1))
+        .setThresholds(Array(1000,1))
          
         .setImpurity("gini")
-        .setMaxDepth(20)
+        .setMaxDepth(5)
         .setMaxBins(10000)
-        .setMinInstancesPerNode(2)
 
         //为每个分类设置一个阈值，参数的长度必须和类的个数相等。最终的分类结果会是p/t最大的那个分类，其中p是通过Bayes计算出来的结果，t是阈值。 
         //这对于训练样本严重不均衡的情况尤其重要，比如分类0有200万数据，而分类1有2万数据，此时应用new NaiveBayes().setThresholds(Array(100.0,1.0))    这里t1=100  t2=1
@@ -159,7 +166,9 @@ object FE {
     val pipeline = new Pipeline().setStages(Array(rfClassifier))
       
     val model = pipeline.fit(trainingData)
-      
+     
+    println("training done in " + (System.currentTimeMillis()-startTime)/(1000*60) + " minutes." )  
+       
     val predictionResult = model.transform(testData)
         
     val eval_result = IntelUtil.funUtil.get_CF_Matrix(predictionResult)
@@ -168,7 +177,13 @@ object FE {
     println("Current Recall_P is: " + eval_result.Recall_P)
      
      
-
+ 
+    
+    val evaluator = new BinaryClassificationEvaluator().setLabelCol("label_idx").setMetricName("areaUnderROC")
+       
+    val accuracy = evaluator.evaluate(predictionResult) //AUC
+    
+    println("accuracy is: " + accuracy)
     
     
     println("FE done in " + (System.currentTimeMillis()-startTime)/(1000*60) + " minutes." )  

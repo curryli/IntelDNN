@@ -71,6 +71,8 @@ object FE_new {
      
     var data_division = get_from_hive(hc).cache()
     
+    data_division = data_division.repartition(1000)   //Reason: Container killed by YARN for exceeding memory limits. 8.2 GB of 8 GB physical memory used. 
+    
       ///////////////////////////////////////////////////////////
       
     data_division = data_division.withColumn("day_week", get_day_week(data_division("pdate")))
@@ -215,7 +217,14 @@ object FE_new {
     
     
     println("******************************cur stat************************************")
-    val wd = Window.partitionBy("pri_acct_no").orderBy("pdate")
+    
+    
+  
+   
+    val udf_str_to_long = udf[Long, String]{xstr => xstr.toLong} 
+    data_division = data_division.withColumn("pdate_long", udf_str_to_long(data_division("pdate")))
+    
+    val wd = Window.partitionBy("pri_acct_no").orderBy("pdate_long")
     
     val W_cur = wd.rangeBetween(0, 0)    //当日
     data_division = data_division.withColumn("cur_tot_amt", sum("trans_at").over(W_cur)) //当日交易总金额
@@ -298,40 +307,44 @@ object FE_new {
     
     data_division = data_division.withColumn("1hour_no_trans", when(data_division("1hour_tot_cnt") === 1,"1").otherwise("0"))  //前1 小时无交易记录标志
      
+  
     
     println(data_division.columns.mkString(","))
+ 
     
-//    val DisperseArr = Array("iss_head", "iss_ins_id_cd", "resp_cd","app_ins_inf","acq_ins_id_cd","mchnt_tp","card_attr","acct_class","app_ins_id_cd","fwd_ins_id_cd","trans_curr_cd","trans_tp","proc_st","ins_pay_mode","up_discount","app_discount","ctrl_rule1","mer_version","app_version","order_type","app_ntf_st","acq_ntf_st","proc_sys","mchnt_back_url","app_back_url","mer_cert_id","mchnt_nm","acq_ins_inf","country_cd","area_cd")
-// 
-//    //val DisperseArr = Array("iss_head", "iss_ins_id_cd")
-//         
-//    data_division = data_division.na.fill("NULL",DisperseArr);   // null和empty不是一回事
-//    
-//    val udf_replaceEmpty = udf[String, String]{xstr => 
-//        if(xstr.isEmpty())
-//          "NANs"
-//        else
-//          xstr
-//      }
-// 
-//     for(oldcol <- DisperseArr){
-//        val newcol = oldcol + "_filled" 
-//        data_division = data_division.withColumn(newcol, udf_replaceEmpty(data_division(oldcol)))
-//     }
-//      
-//     data_division.show(10)  
-//     
-//     var i = 0
-//     for(oldcol <- DisperseArr){   
-//        println(i)
-//        i = i + 1 
-//        val newcol = oldcol + "_filled" 
-//        var indexCat = oldcol + "_CatVec"
-//        var indexer = new StringIndexer().setInputCol(newcol).setOutputCol(indexCat).setHandleInvalid("skip")
-//        data_division = indexer.fit(data_division).transform(data_division)
-//      }
-//      
-//    data_division.show(10)  
+    //////////////////////////////////////////////////////////////////////////////////////////////
+   
+    //val DisperseArr = Array("iss_head", "iss_ins_id_cd")
+    
+    val DisperseArr = IntelUtil.varUtil.DisperseArr
+         
+    data_division = data_division.na.fill("NULL",DisperseArr);   // null和empty不是一回事
+    
+    val udf_replaceEmpty = udf[String, String]{xstr => 
+        if(xstr.isEmpty())
+          "NANs"
+        else
+          xstr
+      }
+ 
+     for(oldcol <- DisperseArr){
+        val newcol = oldcol + "_filled" 
+        data_division = data_division.withColumn(newcol, udf_replaceEmpty(data_division(oldcol)))
+     }
+      
+     data_division.show(10)  
+     
+     var i = 0
+     for(oldcol <- DisperseArr){   
+        println(i)
+        i = i + 1 
+        val newcol = oldcol + "_filled" 
+        var indexCat = oldcol + "_CatVec"
+        var indexer = new StringIndexer().setInputCol(newcol).setOutputCol(indexCat).setHandleInvalid("skip")
+        data_division = indexer.fit(data_division).transform(data_division)
+      }
+      
+    data_division.show(10)  
     
      
     
