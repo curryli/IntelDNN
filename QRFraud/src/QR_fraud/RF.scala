@@ -56,11 +56,12 @@ object RF {
            
     val startTime = System.currentTimeMillis(); 
       
-    var data_division = FE_new.FE_function(hc).cache
+    var data_FE = FE_new.FE_function(hc).repartition(1000).cache
      
-    data_division.show(5)
+   
+    //data_division.show(5)
     
-     
+    println("temp done")
     
      //////////////////////////////////////////////////////
     val CatVecArr = IntelUtil.varUtil.DisperseArr.map { x => x + "_CatVec"}
@@ -68,7 +69,15 @@ object RF {
     
     val used_arr = IntelUtil.varUtil.ori_sus_Arr.++( IntelUtil.varUtil.calc_cols).++(CatVecArr)
     
-    //data_division = data_division.selectExpr(used_arr.+:("division"):_*)
+    var data_division = data_FE.selectExpr(used_arr.+:("label").+:("division"):_*).cache
+    
+    data_FE.unpersist(blocking=false)
+    
+    data_division = data_division.na.fill(0, used_arr)
+    data_division = data_division.na.drop()
+    
+    
+    //data_division.dtypes.foreach(println)
     //data_division.show(5)
     
     val assembler1 = new VectorAssembler()
@@ -106,8 +115,8 @@ object RF {
     println("trainingData.count: ", trainingData.count, " testData.count: ", testData.count)
     
     
-    trainingData.selectExpr(used_arr.+:("label_idx"):_*).rdd.map(_.mkString(",")).saveAsTextFile("xrli/QRfraud/trainingData")
-    testData.selectExpr(used_arr.+:("label_idx"):_*).rdd.map(_.mkString(",")).saveAsTextFile("xrli/QRfraud/testData")
+//    trainingData.selectExpr(used_arr.+:("label_idx"):_*).rdd.map(_.mkString(",")).saveAsTextFile("xrli/QRfraud/trainingData")
+//    testData.selectExpr(used_arr.+:("label_idx"):_*).rdd.map(_.mkString(",")).saveAsTextFile("xrli/QRfraud/testData")
     
      
     println("Save done in " + (System.currentTimeMillis()-startTime)/(1000*60) + " minutes." )  
@@ -118,7 +127,7 @@ object RF {
         .setNumTrees(100)
         .setSubsamplingRate(0.7)
         .setFeatureSubsetStrategy("auto")
-        .setThresholds(Array(1000,1))
+        .setThresholds(Array(10,1))
          
         .setImpurity("gini")
         .setMaxDepth(5)

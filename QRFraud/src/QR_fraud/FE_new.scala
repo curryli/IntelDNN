@@ -73,6 +73,40 @@ object FE_new {
     
     data_division = data_division.repartition(1000)   //Reason: Container killed by YARN for exceeding memory limits. 8.2 GB of 8 GB physical memory used. 
     
+    /////////////////////////////////////////////////////////
+    
+    //val DisperseArr = Array("iss_head", "iss_ins_id_cd")
+    
+    val DisperseArr = IntelUtil.varUtil.DisperseArr
+         
+    data_division = data_division.na.fill("NULL",DisperseArr);   // null和empty不是一回事
+    
+    val udf_replaceEmpty = udf[String, String]{xstr => 
+        if(xstr.isEmpty())
+          "NANs"
+        else
+          xstr
+      }
+ 
+     for(oldcol <- DisperseArr){
+        val newcol = oldcol + "_filled" 
+        data_division = data_division.withColumn(newcol, udf_replaceEmpty(data_division(oldcol)))
+     }
+      
+     data_division.show(10)  
+     
+     var i = 0
+     for(oldcol <- DisperseArr){   
+        println(i)
+        i = i + 1 
+        val newcol = oldcol + "_filled" 
+        var indexCat = oldcol + "_CatVec"
+        var indexer = new StringIndexer().setInputCol(newcol).setOutputCol(indexCat).setHandleInvalid("skip")
+        data_division = indexer.fit(data_division).transform(data_division)
+      }
+      
+    data_division.show(10) 
+    
       ///////////////////////////////////////////////////////////
       
     data_division = data_division.withColumn("day_week", get_day_week(data_division("pdate")))
@@ -255,7 +289,7 @@ object FE_new {
     data_division = data_division.withColumn("hist_avg_amt", avg("trans_at").over(W_hist))  
  
     //除当日外历史所有无交易记录标志
-    data_division = data_division.withColumn("hist_no_trans", when(data_division("hist_tot_cnt") === 0,"1").otherwise("0"))  
+    data_division = data_division.withColumn("hist_no_trans", when(data_division("hist_tot_cnt") === 0,1.0).otherwise(0.0))  
     
     
     
@@ -282,7 +316,7 @@ object FE_new {
     data_division = data_division.withColumn("min15_min_amt", min("trans_at").over(W_min15)) //15 min最小交易金额
     data_division = data_division.withColumn("min15_avg_amt", avg("trans_at").over(W_min15)) //15 min平均交易金额
     
-    data_division = data_division.withColumn("min15_no_trans", when(data_division("min15_tot_cnt") === 1,"1").otherwise("0"))   //前15分钟无交易记录标志
+    data_division = data_division.withColumn("min15_no_trans", when(data_division("min15_tot_cnt") === 1,1.0).otherwise(0.0))   //前15分钟无交易记录标志
     
     
      //统计1小时内
@@ -305,7 +339,7 @@ object FE_new {
     data_division = data_division.withColumn("1hour_min_amt", min("trans_at").over(W_hour1)) // 1 hour最小交易金额
     data_division = data_division.withColumn("1hour_avg_amt", avg("trans_at").over(W_hour1)) // 1 hour平均交易金额
     
-    data_division = data_division.withColumn("1hour_no_trans", when(data_division("1hour_tot_cnt") === 1,"1").otherwise("0"))  //前1 小时无交易记录标志
+    data_division = data_division.withColumn("1hour_no_trans", when(data_division("1hour_tot_cnt") === 1,1.0).otherwise(0.0))  //前1 小时无交易记录标志
      
   
     
@@ -313,41 +347,8 @@ object FE_new {
  
     
     //////////////////////////////////////////////////////////////////////////////////////////////
-   
-    //val DisperseArr = Array("iss_head", "iss_ins_id_cd")
-    
-    val DisperseArr = IntelUtil.varUtil.DisperseArr
-         
-    data_division = data_division.na.fill("NULL",DisperseArr);   // null和empty不是一回事
-    
-    val udf_replaceEmpty = udf[String, String]{xstr => 
-        if(xstr.isEmpty())
-          "NANs"
-        else
-          xstr
-      }
- 
-     for(oldcol <- DisperseArr){
-        val newcol = oldcol + "_filled" 
-        data_division = data_division.withColumn(newcol, udf_replaceEmpty(data_division(oldcol)))
-     }
-      
-     data_division.show(10)  
-     
-     var i = 0
-     for(oldcol <- DisperseArr){   
-        println(i)
-        i = i + 1 
-        val newcol = oldcol + "_filled" 
-        var indexCat = oldcol + "_CatVec"
-        var indexer = new StringIndexer().setInputCol(newcol).setOutputCol(indexCat).setHandleInvalid("skip")
-        data_division = indexer.fit(data_division).transform(data_division)
-      }
-      
-    data_division.show(10)  
     
      
-    
     data_division
   }
   

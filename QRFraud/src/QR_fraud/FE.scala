@@ -62,8 +62,8 @@ object FE {
     var data_division = get_from_hive(hc).cache()
     
     
-    val DisperseArr = Array("iss_head", "iss_ins_id_cd", "resp_cd","app_ins_inf","acq_ins_id_cd","mchnt_tp","card_attr","acct_class","app_ins_id_cd","fwd_ins_id_cd","trans_curr_cd","trans_tp","proc_st","ins_pay_mode","up_discount","app_discount","ctrl_rule1","mer_version","app_version","order_type","app_ntf_st","acq_ntf_st","proc_sys","mchnt_back_url","app_back_url","mer_cert_id","mchnt_nm","acq_ins_inf","country_cd","area_cd")
- 
+    val DisperseArr = IntelUtil.varUtil.DisperseArr
+    
     //val DisperseArr = Array("iss_head", "iss_ins_id_cd")
          
     data_division = data_division.na.fill("NULL",DisperseArr);   // null和empty不是一回事
@@ -77,7 +77,7 @@ object FE {
  
      for(oldcol <- DisperseArr){
         val newcol = oldcol + "_filled" 
-        println(oldcol , " count: ", data_division.select(oldcol).distinct().count())
+        //println(oldcol , " count: ", data_division.select(oldcol).distinct().count())
         data_division = data_division.withColumn(newcol, udf_replaceEmpty(data_division(oldcol)))
      }
       
@@ -152,7 +152,7 @@ object FE {
         .setNumTrees(50)
         .setSubsamplingRate(0.7)
         .setFeatureSubsetStrategy("auto")
-        .setThresholds(Array(1000,1))
+        .setThresholds(Array(10,1))
          
         .setImpurity("gini")
         .setMaxDepth(5)
@@ -161,13 +161,13 @@ object FE {
         //为每个分类设置一个阈值，参数的长度必须和类的个数相等。最终的分类结果会是p/t最大的那个分类，其中p是通过Bayes计算出来的结果，t是阈值。 
         //这对于训练样本严重不均衡的情况尤其重要，比如分类0有200万数据，而分类1有2万数据，此时应用new NaiveBayes().setThresholds(Array(100.0,1.0))    这里t1=100  t2=1
      
+       
       
-          
-    val pipeline = new Pipeline().setStages(Array(rfClassifier))
-      
-    val model = pipeline.fit(trainingData)
+    val model = rfClassifier.fit(trainingData)
      
     println("training done in " + (System.currentTimeMillis()-startTime)/(1000*60) + " minutes." )  
+    
+  
        
     val predictionResult = model.transform(testData)
         
@@ -185,7 +185,14 @@ object FE {
     
     println("accuracy is: " + accuracy)
     
+     
+    val featureImportance = model.featureImportances.toSparse
+    val topFeatures = used_arr.zip(featureImportance.values).sortBy( - _._2) 
     
+    topFeatures.foreach(println)
+
+
+
     println("FE done in " + (System.currentTimeMillis()-startTime)/(1000*60) + " minutes." )  
   }
    

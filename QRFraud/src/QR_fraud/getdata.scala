@@ -74,7 +74,9 @@ object getdata {
    val udf_label = udf(set_label)  
    
    var normal_train_lb = normal_train.withColumn("division", udf_divide(normal_train("area_cd"), lit("normal"), lit("train"))).withColumn("label", udf_label(normal_train("area_cd"), lit(0.0)))
+            // .sample(false, 0.001)
    var normal_test_lb = normal_test.withColumn("division", udf_divide(normal_test("area_cd"), lit("normal"), lit("test"))).withColumn("label", udf_label(normal_test("area_cd"), lit(0.0)))
+            // .sample(false, 0.001)
    var fraud_train_lb = fraud_train.withColumn("division", udf_divide(fraud_train("area_cd"), lit("fraud"), lit("train"))).withColumn("label", udf_label(fraud_train("area_cd"), lit(1.0)))
    var fraud_test_lb = fraud_test.withColumn("division", udf_divide(fraud_test("area_cd"), lit("fraud"), lit("test"))).withColumn("label", udf_label(fraud_test("area_cd"), lit(1.0)))
     
