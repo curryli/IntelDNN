@@ -35,6 +35,35 @@ import org.apache.spark.sql.types.DoubleType
 import org.apache.spark.sql._
 import org.apache.spark.sql.types._
 import org.apache.spark.sql.functions._
+import org.apache.spark.mllib.linalg.Vectors  
+import org.apache.spark.ml.evaluation.BinaryClassificationEvaluator
+import org.apache.spark.rdd.RDD
+import scala.collection.mutable.{Buffer,Set,Map}
+import org.apache.spark.rdd.RDD.rddToPairRDDFunctions
+import org.apache.spark.sql.functions._
+import org.apache.spark.ml.feature.StandardScaler
+import org.apache.spark.ml.feature.MinMaxScaler
+import org.apache.spark.ml.feature.Normalizer
+import org.apache.spark.ml.feature.StringIndexer
+import org.apache.spark.ml.feature.VectorAssembler
+import org.apache.spark.ml.feature.OneHotEncoder
+
+
+ 
+import org.apache.spark.ml.Pipeline
+import org.apache.spark.ml.classification._
+import org.apache.spark.ml.evaluation.MulticlassClassificationEvaluator
+import org.apache.spark.ml.feature.{IndexToString, StringIndexer, VectorAssembler}
+
+import scala.collection.mutable.ArrayBuffer
+import scala.reflect.runtime.universe
+
+import org.apache.spark.ml.Pipeline
+import org.apache.spark.ml.PipelineStage
+import org.apache.spark.sql.types.DoubleType
+import org.apache.spark.sql._
+import org.apache.spark.sql.types._
+import org.apache.spark.sql.functions._
 import org.apache.spark.sql.expressions.Window
 import org.apache.spark.sql.functions._
 import org.apache.spark.sql.functions 
@@ -50,9 +79,8 @@ import getdata.get_from_hive;
 import getdata.get_from_hive
 
 
-object FE_new {
-  
-  def any_to_double[T: ClassTag](b: T):Double={
+object FE_RF {
+   def any_to_double[T: ClassTag](b: T):Double={
     if(b==true)
       1.0
     else
@@ -65,19 +93,30 @@ object FE_new {
   val get_day_week = udf[Int, String]{xstr => IntelUtil.funUtil.dayForWeek(xstr)}
   
   var index_arr = Array[String]()
-  def FE_function(hc: HiveContext):DataFrame = { 
 
+  def main(args: Array[String]): Unit = {
+
+    Logger.getLogger("org").setLevel(Level.ERROR);
+    Logger.getLogger("akka").setLevel(Level.ERROR);
+    Logger.getLogger("hive").setLevel(Level.WARN);
+    Logger.getLogger("parse").setLevel(Level.ERROR);
+
+    //    require(args.length == 3)
+
+    val conf = new SparkConf().setAppName("QR_fraud")
+    val sc = new SparkContext(conf)
+    val hc = new HiveContext(sc)
+    val sqlContext = new SQLContext(sc)
+    
+           
     val startTime = System.currentTimeMillis(); 
      
-    var data_division = get_from_hive(hc).cache//.persist(StorageLevel.MEMORY_AND_DISK_SER)
+    var data_division = get_from_hive(hc).cache()
     
-    data_division = data_division.repartition(100)   //Reason: Container killed by YARN for exceeding memory limits. 8.2 GB of 8 GB physical memory used. 
     
-    /////////////////////////////////////////////////////////
+    var DisperseArr = IntelUtil.varUtil.DisperseArr
     
     //val DisperseArr = Array("iss_head", "iss_ins_id_cd")
-    
-    val DisperseArr = IntelUtil.varUtil.DisperseArr
          
     data_division = data_division.na.fill("NULL",DisperseArr);   // null和empty不是一回事
     
@@ -88,14 +127,8 @@ object FE_new {
           xstr
       }
  
-     for(oldcol <- DisperseArr){
-        val newcol = oldcol + "_filled" 
-        data_division = data_division.withColumn(newcol, udf_replaceEmpty(data_division(oldcol)))
-     }
-      
-     //data_division.show(10)   
-     
-     for(oldcol <- DisperseArr){   
+    
+   for(oldcol <- DisperseArr){   
         val newcol = oldcol + "_filled" 
         val col_cnt = data_division.select(oldcol).distinct().count()
         if(col_cnt<500){
@@ -108,10 +141,15 @@ object FE_new {
           data_division = indexer.fit(data_division).transform(data_division)
         }
       }
-      
        
+    
+    DisperseArr = index_arr
      
-    //data_division.show(10) 
+    println("data_division index done in " + (System.currentTimeMillis()-startTime)/(1000*60) + " minutes." )  
+             
+    data_division.show(10) 
+    
+    
     
       ///////////////////////////////////////////////////////////
       
@@ -350,14 +388,97 @@ object FE_new {
   
     
     println(data_division.columns.mkString(","))
- 
     
-    //////////////////////////////////////////////////////////////////////////////////////////////
+    
+    ///////////////////////////////////////////////////////
+    //////////////////////////////////////////////////////
+    val CatVecArr = DisperseArr.map { x => x + "_CatVec"}
+    
+    val used_arr = IntelUtil.varUtil.ori_sus_Arr.++( IntelUtil.varUtil.calc_cols).++(CatVecArr)
+    
+    data_division = data_division.selectExpr(used_arr.+:("label").+:("division"):_*).cache()
+     
+    
+    data_division = data_division.na.fill(0, used_arr)
+    data_division = data_division.na.drop()
+    
+    val assembler1 = new VectorAssembler()
+      .setInputCols(used_arr)
+      .setOutputCol("featureVector")
+     
+    data_division = assembler1.transform(data_division)
+    println("assembler1 dataframe")
+    data_division.show(10) 
+      
+      
+    val normalizer1 = new Normalizer().setInputCol("featureVector").setOutputCol("normFeatures")     //默认是L2
+    data_division = normalizer1.transform(data_division)
+     
+    println("normalizer dataframe")
+
+    data_division.show(10)
+     
+    var normal_train = data_division.filter(data_division("division")=== "normal_train")
+    var normal_test = data_division.filter(data_division("division")=== "normal_test")
+    var fraud_train = data_division.filter(data_division("division")=== "fraud_train")
+    var fraud_test = data_division.filter(data_division("division")=== "fraud_test")
+   
+    val trainingData = normal_train.sample(false, 0.005).unionAll(fraud_train).cache()
+    val testData = normal_test.unionAll(fraud_test).cache()
+    
+    data_division.unpersist(blocking=false)
+    
+    println("trainingData.count: ", trainingData.count, " testData.count: ", testData.count)
+     
+    trainingData.selectExpr(used_arr.+:("label"):_*).rdd.map(_.mkString(",")).saveAsTextFile("xrli/QRfraud/trainingData_new")
+    testData.selectExpr(used_arr.+:("label"):_*).rdd.map(_.mkString(",")).saveAsTextFile("xrli/QRfraud/testData_new")
+     
     
      
-    data_division
-  }
+    println("Save done in " + (System.currentTimeMillis()-startTime)/(1000*60) + " minutes." )  
+    val rfClassifier = new RandomForestClassifier()
+        .setLabelCol("label")
+        .setFeaturesCol("featureVector")
+        .setNumTrees(200)
+        .setSubsamplingRate(0.7)
+        .setFeatureSubsetStrategy("auto")
+        .setThresholds(Array(180,1))
+         
+        .setImpurity("gini")
+        .setMaxDepth(5)
+        .setMaxBins(10000)
+     
+       
+      
+    val model = rfClassifier.fit(trainingData)
+     
+    println("training done in " + (System.currentTimeMillis()-startTime)/(1000*60) + " minutes." )  
+    
   
+       
+    val predictionResult = model.transform(testData)
+        
+    val eval_result = IntelUtil.funUtil.get_CF_Matrix(predictionResult)
+     
+    println("Current Precision_P is: " + eval_result.Precision_P)
+    println("Current Recall_P is: " + eval_result.Recall_P)
+      
+    val evaluator = new BinaryClassificationEvaluator().setLabelCol("label").setMetricName("areaUnderROC")
+       
+    val accuracy = evaluator.evaluate(predictionResult) //AUC
+    
+    println("accuracy is: " + accuracy)
+    
+     
+    val featureImportance = model.featureImportances.toSparse
+    val topFeatures = used_arr.zip(featureImportance.values).sortBy( - _._2) 
+    
+    topFeatures.foreach(println)
+
+
+
+    println("FE done in " + (System.currentTimeMillis()-startTime)/(1000*60) + " minutes." )  
+  }
    
   
 }

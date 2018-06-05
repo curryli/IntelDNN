@@ -8,6 +8,7 @@ import org.apache.spark.sql.hive.HiveContext
 import org.apache.spark.graphx._
 import org.apache.spark.sql.functions._
 import org.apache.spark.storage.StorageLevel
+
 import org.apache.spark.rdd.RDD
 import scala.collection.mutable.{Buffer,Set,Map}
 import org.apache.spark.rdd.RDD.rddToPairRDDFunctions
@@ -25,32 +26,31 @@ import org.apache.spark.ml.Pipeline
 import org.apache.spark.ml.classification._
 import org.apache.spark.ml.evaluation.MulticlassClassificationEvaluator
 import org.apache.spark.ml.feature.{IndexToString, StringIndexer, VectorAssembler}
-
 import scala.collection.mutable.ArrayBuffer
 import scala.reflect.runtime.universe
-
 import org.apache.spark.ml.Pipeline
 import org.apache.spark.ml.PipelineStage
 import org.apache.spark.sql.types.DoubleType
 import org.apache.spark.sql._
 import org.apache.spark.sql.types._
 import org.apache.spark.sql.functions._
+
 import org.apache.spark.sql.expressions.Window
 import org.apache.spark.sql.functions._
 import org.apache.spark.sql.functions 
+
 import org.apache.spark.sql.expressions._
 
 import java.text.ParseException
 import java.text.SimpleDateFormat
 import java.util.Calendar
 import java.util.Date
-
 import scala.reflect.ClassTag
-import getdata.get_from_hive;
+
 import getdata.get_from_hive
 
 
-object FE_new {
+object FE_OneHot {
   
   def any_to_double[T: ClassTag](b: T):Double={
     if(b==true)
@@ -64,14 +64,14 @@ object FE_new {
   val udf_int_to_double = udf[Double, Int]{xstr => any_to_double(xstr)}  
   val get_day_week = udf[Int, String]{xstr => IntelUtil.funUtil.dayForWeek(xstr)}
   
-  var index_arr = Array[String]()
+  
   def FE_function(hc: HiveContext):DataFrame = { 
 
-    val startTime = System.currentTimeMillis(); 
+     val startTime = System.currentTimeMillis(); 
      
-    var data_division = get_from_hive(hc).cache//.persist(StorageLevel.MEMORY_AND_DISK_SER)
+    var data_division = get_from_hive(hc).persist(StorageLevel.MEMORY_AND_DISK_SER)
     
-    data_division = data_division.repartition(100)   //Reason: Container killed by YARN for exceeding memory limits. 8.2 GB of 8 GB physical memory used. 
+    data_division = data_division.repartition(1000)   //Reason: Container killed by YARN for exceeding memory limits. 8.2 GB of 8 GB physical memory used. 
     
     /////////////////////////////////////////////////////////
     
@@ -88,30 +88,24 @@ object FE_new {
           xstr
       }
  
-     for(oldcol <- DisperseArr){
+   var index_arr = Array[String]()
+   for(oldcol <- DisperseArr){   
         val newcol = oldcol + "_filled" 
+        println(oldcol)
+        index_arr = index_arr.+:(oldcol)
         data_division = data_division.withColumn(newcol, udf_replaceEmpty(data_division(oldcol)))
-     }
-      
-     //data_division.show(10)   
-     
-     for(oldcol <- DisperseArr){   
-        val newcol = oldcol + "_filled" 
-        val col_cnt = data_division.select(oldcol).distinct().count()
-        if(col_cnt<500){
-          println(oldcol , " count: ", col_cnt)
-          index_arr = index_arr.+:(oldcol)
-          data_division = data_division.withColumn(newcol, udf_replaceEmpty(data_division(oldcol)))
-
-          var indexCat = oldcol + "_CatVec"
-          var indexer = new StringIndexer().setInputCol(newcol).setOutputCol(indexCat).setHandleInvalid("skip")
-          data_division = indexer.fit(data_division).transform(data_division)
-        }
+        var col_dict = IntelUtil.funUtil.get_col_map(data_division, newcol)
+         
+        data_division = IntelUtil.funUtil.modify_by_dict(data_division, newcol, col_dict)
+        
+        var indexCat = newcol + "_idx"
+        var VecCat = oldcol + "_onehot"
+        var encoder = new OneHotEncoder().setInputCol(indexCat).setOutputCol(VecCat).setDropLast(false)
+        data_division = encoder.transform(data_division)
+   
       }
       
-       
-     
-    //data_division.show(10) 
+    data_division.show(10) 
     
       ///////////////////////////////////////////////////////////
       

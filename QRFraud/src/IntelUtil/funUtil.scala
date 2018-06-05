@@ -168,4 +168,69 @@ object funUtil {
 
   
   
+  
+def get_woe_map(vec_data:DataFrame, colname:String, label_col:String="label"): HashMap[String,Double]={
+     var bad_all = vec_data.filter(vec_data(label_col)==="1.0") 
+     var good_all = vec_data.filter(vec_data(label_col)==="0.0") 
+     var bad_count_all = bad_all.count()
+     var good_count_all = good_all.count()
+     println("bad_count_all count is: " +  bad_count_all)
+     println("good_count_all count is: " +  good_count_all)
+      
+     val woeMap = new HashMap[String,Double]()
+     
+     //val QD_num = QD_money_num
+     val cat_set = vec_data.select(colname).rdd.map(x=>x.getString(0)).distinct().collect
+     println("cat_set is : ")
+     cat_set.foreach{println}
+     
+     for(i<-cat_set){
+        var bad_i = bad_all.filter(bad_all(colname)===i) 
+        var bad_count_i = bad_i.count()
+        println("bad_count_i " + i +  " count is: " +  bad_count_i)   
+        
+        var good_i = good_all.filter(good_all(colname)===i) 
+        var good_count_i = good_i.count()
+        println("good_count_i " + i +  " count is: " +  good_count_i)   
+      
+        var woe_i = Math.log((bad_count_i.toDouble/bad_count_all.toDouble)/(good_count_i.toDouble/good_count_all.toDouble))     
+        
+        woeMap.+=(i -> woe_i)
+     }
+     
+     woeMap 
+  }
+  
+  def WOE_modify(vec_data:DataFrame, colname:String, woeMap: HashMap[String, Double]):DataFrame={
+    //val map_name = "woeMap_" + colname
+    val newcol_name = colname + "_WOE"
+    val udf_woemap = udf[Double, String]{key => woeMap(key)}
+    
+    val modified_vec = vec_data.withColumn(newcol_name, udf_woemap(vec_data(colname)))
+    
+    modified_vec
+  }
+  
+  
+  
+  def get_col_map(vec_data:DataFrame, colname:String): scala.collection.mutable.HashMap[String, Long]={
+     val col_dict = new scala.collection.mutable.HashMap[String,Long]()
+     val col_map = vec_data.select(colname).rdd.map(x=>x.getString(0)).distinct().zipWithIndex() 
+     col_map.collect().foreach(f=>
+        col_dict.+=(f._1 -> f._2)
+     )
+     
+     col_dict 
+}
+  
+  def modify_by_dict(vec_data:DataFrame, colname:String, col_dict: HashMap[String, Long]):DataFrame={
+    //val map_name = "woeMap_" + colname
+    val newcol_name = colname + "_idx"
+    val udf_map = udf[Double, String]{key => col_dict(key)}
+    
+    val modified_vec = vec_data.withColumn(newcol_name, udf_map(vec_data(colname)))
+    
+    modified_vec
+  }
+  
 }

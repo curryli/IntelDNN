@@ -36,6 +36,20 @@ import org.apache.spark.sql.types._
 import org.apache.spark.sql.functions._
  
 
+//hadoop fs -du -h hdfs://nameservice1/user/hive/warehouse/xrlidb.db/used_train
+//https://blog.csdn.net/hutao_hadoop/article/details/52694550
+
+//--class QR_fraud.RF \
+//--master yarn \
+//--deploy-mode cluster \
+//--queue root.queue2 \
+//--driver-memory 20g \
+//--executor-memory 20G \
+//--num-executors 300 \
+//--conf spark.yarn.executor.memoryOverhead=4096 \
+//--conf spark.yarn.driver.memoryOverhead=4096 \
+//QRfraud.jar \
+
 object RF {
   
 
@@ -56,7 +70,7 @@ object RF {
            
     val startTime = System.currentTimeMillis(); 
       
-    var data_FE = FE_new.FE_function(hc).repartition(1000).cache
+    var data_FE = FE_new.FE_function(hc).repartition(100).cache//.persist(StorageLevel.MEMORY_AND_DISK_SER)
      
    
     //data_division.show(5)
@@ -64,12 +78,12 @@ object RF {
     println("temp done")
     
      //////////////////////////////////////////////////////
-    val CatVecArr = IntelUtil.varUtil.DisperseArr.map { x => x + "_CatVec"}
+    val CatVecArr = FE_new.index_arr.map { x => x + "_CatVec"}
     
     
     val used_arr = IntelUtil.varUtil.ori_sus_Arr.++( IntelUtil.varUtil.calc_cols).++(CatVecArr)
     
-    var data_division = data_FE.selectExpr(used_arr.+:("label").+:("division"):_*).cache
+    var data_division = data_FE.selectExpr(used_arr.+:("label").+:("division"):_*).repartition(100).cache//.persist(StorageLevel.MEMORY_AND_DISK_SER)
     
     data_FE.unpersist(blocking=false)
     
@@ -86,48 +100,41 @@ object RF {
      
     data_division = assembler1.transform(data_division)
     println("assembler1 dataframe")
-    data_division.show(10) 
+    //data_division.show(10) 
       
       
     val normalizer1 = new Normalizer().setInputCol("featureVector").setOutputCol("normFeatures")     //默认是L2
     data_division = normalizer1.transform(data_division)
      
-    val laber_indexer = new StringIndexer()
-     .setInputCol("label")
-     .setOutputCol("label_idx")
-     .fit(data_division)  
-    
-    data_division = laber_indexer.transform(data_division)
-    
     println("labeled Normalize dataframe")
-    data_division.show(10)
+    //data_division.show(10)
      
     var normal_train = data_division.filter(data_division("division")=== "normal_train")
     var normal_test = data_division.filter(data_division("division")=== "normal_test")
     var fraud_train = data_division.filter(data_division("division")=== "fraud_train")
     var fraud_test = data_division.filter(data_division("division")=== "fraud_test")
    
-    val trainingData = normal_train.sample(false, 0.005).unionAll(fraud_train).cache
-    val testData = normal_test.unionAll(fraud_test).cache
+    val trainingData = normal_train.sample(false, 0.005).unionAll(fraud_train).repartition(100).cache//.persist(StorageLevel.MEMORY_AND_DISK_SER)
+    val testData = normal_test.unionAll(fraud_test).repartition(100).cache//.persist(StorageLevel.MEMORY_AND_DISK_SER)
     
     data_division.unpersist(blocking=false)
+    println("trainingData and testData done")
+    //println("trainingData.count: ", trainingData.count, " testData.count: ", testData.count)
     
-    println("trainingData.count: ", trainingData.count, " testData.count: ", testData.count)
     
-    
-//    trainingData.selectExpr(used_arr.+:("label_idx"):_*).rdd.map(_.mkString(",")).saveAsTextFile("xrli/QRfraud/trainingData")
-//    testData.selectExpr(used_arr.+:("label_idx"):_*).rdd.map(_.mkString(",")).saveAsTextFile("xrli/QRfraud/testData")
+    trainingData.selectExpr(used_arr.+:("label"):_*).rdd.map(_.mkString(",")).saveAsTextFile("xrli/QRfraud/trainingData")
+    testData.selectExpr(used_arr.+:("label"):_*).rdd.map(_.mkString(",")).saveAsTextFile("xrli/QRfraud/testData")
     
      
     println("Save done in " + (System.currentTimeMillis()-startTime)/(1000*60) + " minutes." )  
     
     val rfClassifier = new RandomForestClassifier()
-        .setLabelCol("label_idx")
+        .setLabelCol("label")
         .setFeaturesCol("featureVector")
-        .setNumTrees(100)
+        .setNumTrees(200)
         .setSubsamplingRate(0.7)
         .setFeatureSubsetStrategy("auto")
-        .setThresholds(Array(10,1))
+        .setThresholds(Array(180,1))
          
         .setImpurity("gini")
         .setMaxDepth(5)
@@ -154,7 +161,7 @@ object RF {
     
     
     
-    val evaluator = new BinaryClassificationEvaluator().setLabelCol("label_idx").setMetricName("areaUnderROC")
+    val evaluator = new BinaryClassificationEvaluator().setLabelCol("label").setMetricName("areaUnderROC")
        
     val accuracy = evaluator.evaluate(predictionResult) //AUC
     
