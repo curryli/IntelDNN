@@ -149,15 +149,18 @@ object saveIndex {
    for(oldcol <- DisperseArr){   
         val newcol = oldcol + "_filled" 
         val col_cnt = data_division.select(oldcol).distinct().count()
-        if(col_cnt<500){
-          println(oldcol , " count: ", col_cnt)
-          index_arr = index_arr.+:(oldcol)
-          data_division = data_division.withColumn(newcol, udf_replaceEmpty(data_division(oldcol)))
 
-          var indexCat = oldcol + "_CatVec"
-          var indexer = new StringIndexer().setInputCol(newcol).setOutputCol(indexCat).setHandleInvalid("skip")
-          data_division = indexer.fit(data_division).transform(data_division)
-        }
+        println(oldcol , " count: ", col_cnt)
+
+        data_division = data_division.withColumn(newcol, udf_replaceEmpty(data_division(oldcol)))
+
+        var indexCat = oldcol + "_CatVec"
+        
+        index_arr = index_arr.+:(indexCat)
+        
+        var indexer = new StringIndexer().setInputCol(newcol).setOutputCol(indexCat).setHandleInvalid("skip")
+        data_division = indexer.fit(data_division).transform(data_division)
+
       }
        
      
@@ -165,7 +168,7 @@ object saveIndex {
              
     data_division.show(10) 
     
-    val used_arr = IntelUtil.varUtil.ori_sus_Arr.++(index_arr).+:("label").+:("division")
+    val used_arr = IntelUtil.varUtil.ori_sus_Arr.++(index_arr).+:("label").+:("division").+:("pri_acct_no")
     
     
     println(used_arr.mkString(","))

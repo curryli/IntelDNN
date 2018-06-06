@@ -423,8 +423,8 @@ object FE_RF {
     var fraud_train = data_division.filter(data_division("division")=== "fraud_train")
     var fraud_test = data_division.filter(data_division("division")=== "fraud_test")
    
-    val trainingData = normal_train.sample(false, 0.005).unionAll(fraud_train).cache()
-    val testData = normal_test.unionAll(fraud_test).cache()
+    val trainingData = normal_train.sample(false, 0.005).unionAll(fraud_train)//.cache()
+    val testData = normal_test.unionAll(fraud_test)//.cache()
     
     data_division.unpersist(blocking=false)
     
