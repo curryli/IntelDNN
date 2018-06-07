@@ -1,4 +1,4 @@
-package QR_fraud
+package split
 import org.apache.log4j.Level
 import org.apache.log4j.Logger
 import org.apache.spark.SparkConf
@@ -8,6 +8,7 @@ import org.apache.spark.sql.hive.HiveContext
 import org.apache.spark.graphx._
 import org.apache.spark.sql.functions._
 import org.apache.spark.storage.StorageLevel
+
 import org.apache.spark.rdd.RDD
 import scala.collection.mutable.{Buffer,Set,Map}
 import org.apache.spark.rdd.RDD.rddToPairRDDFunctions
@@ -23,40 +24,16 @@ import org.apache.spark.ml.feature.OneHotEncoder
  
 import org.apache.spark.ml.Pipeline
 import org.apache.spark.ml.classification._
-import org.apache.spark.ml.evaluation.MulticlassClassificationEvaluator
+import org.apache.spark.ml.evaluation.BinaryClassificationEvaluator
 import org.apache.spark.ml.feature.{IndexToString, StringIndexer, VectorAssembler}
-
 import scala.collection.mutable.ArrayBuffer
 import scala.reflect.runtime.universe
-
 import org.apache.spark.ml.Pipeline
 import org.apache.spark.ml.PipelineStage
 import org.apache.spark.sql.types.DoubleType
 import org.apache.spark.sql._
 import org.apache.spark.sql.types._
 import org.apache.spark.sql.functions._
-import org.apache.spark.mllib.linalg.Vectors  
-import org.apache.spark.ml.evaluation.BinaryClassificationEvaluator
-import org.apache.spark.rdd.RDD
-import scala.collection.mutable.{Buffer,Set,Map}
-import org.apache.spark.rdd.RDD.rddToPairRDDFunctions
-import org.apache.spark.sql.functions._
-import org.apache.spark.ml.feature.StandardScaler
-import org.apache.spark.ml.feature.MinMaxScaler
-import org.apache.spark.ml.feature.Normalizer
-import org.apache.spark.ml.feature.StringIndexer
-import org.apache.spark.ml.feature.VectorAssembler
-import org.apache.spark.ml.feature.OneHotEncoder
-
-
- 
-import org.apache.spark.ml.Pipeline
-import org.apache.spark.ml.classification._
-import org.apache.spark.ml.evaluation.MulticlassClassificationEvaluator
-import org.apache.spark.ml.feature.{IndexToString, StringIndexer, VectorAssembler}
-
-import scala.collection.mutable.ArrayBuffer
-import scala.reflect.runtime.universe
 
 import org.apache.spark.ml.Pipeline
 import org.apache.spark.ml.PipelineStage
@@ -74,13 +51,11 @@ import java.text.SimpleDateFormat
 import java.util.Calendar
 import java.util.Date
 
-import scala.reflect.ClassTag
+import scala.reflect.ClassTag 
  
-import getdata.get_from_hive
 
-
-object FE_RF {
-   def any_to_double[T: ClassTag](b: T):Double={
+object testMetric {
+  def any_to_double[T: ClassTag](b: T):Double={
     if(b==true)
       1.0
     else
@@ -91,8 +66,7 @@ object FE_RF {
   val udf_bool_to_double = udf[Double, Boolean]{xstr => any_to_double(xstr)} 
   val udf_int_to_double = udf[Double, Int]{xstr => any_to_double(xstr)}  
   val get_day_week = udf[Int, String]{xstr => IntelUtil.funUtil.dayForWeek(xstr)}
-  
-  var index_arr = Array[String]()
+  val get_pdate = udf[String, String]{xstr => xstr.substring(0, 8)}
 
   def main(args: Array[String]): Unit = {
 
@@ -106,51 +80,28 @@ object FE_RF {
     val conf = new SparkConf().setAppName("QR_fraud")
     val sc = new SparkContext(conf)
     val hc = new HiveContext(sc)
-    val sqlContext = new SQLContext(sc)
-    
-           
+     
     val startTime = System.currentTimeMillis(); 
-     
-    var data_division = get_from_hive(hc).cache()
+      
+    var allRdd = sc.textFile("xrli/QRfraud/saveIndex").map{str=>
+           val tmparr = str.split(",")       
+           
+           var tmpList = List(tmparr(0).toString).:+(tmparr(1).toString).:+(tmparr(2).toDouble).:+(tmparr(3).toString).:+(tmparr(4).toString)
+           for(i<- 5 to tmparr.length-1){
+             tmpList = tmpList.:+(tmparr(i).toDouble)
+           }
+            
+           Row.fromSeq(tmpList.toSeq)
+       }
     
     
-    var DisperseArr = IntelUtil.varUtil.DisperseArr
+   
+    var data_division = hc.createDataFrame(allRdd, IntelUtil.varUtil.schema_load).cache
     
-    //val DisperseArr = Array("iss_head", "iss_ins_id_cd")
-         
-    data_division = data_division.na.fill("NULL",DisperseArr);   // null和empty不是一回事
     
-    val udf_replaceEmpty = udf[String, String]{xstr => 
-        if(xstr.isEmpty())
-          "NANs"
-        else
-          xstr
-      }
- 
-    
-   for(oldcol <- DisperseArr){   
-        val newcol = oldcol + "_filled" 
-        val col_cnt = data_division.select(oldcol).distinct().count()
-        if(col_cnt<500){
-          println(oldcol , " count: ", col_cnt)
-          index_arr = index_arr.+:(oldcol)
-          data_division = data_division.withColumn(newcol, udf_replaceEmpty(data_division(oldcol)))
 
-          var indexCat = oldcol + "_CatVec"
-          var indexer = new StringIndexer().setInputCol(newcol).setOutputCol(indexCat).setHandleInvalid("skip")
-          data_division = indexer.fit(data_division).transform(data_division)
-        }
-      }
-       
     
-    DisperseArr = index_arr
-     
-    println("data_division index done in " + (System.currentTimeMillis()-startTime)/(1000*60) + " minutes." )  
-             
-    data_division.show(10) 
-    
-    
-    
+    data_division = data_division.withColumn("pdate", get_pdate(data_division("trans_tm")))
       ///////////////////////////////////////////////////////////
       
     data_division = data_division.withColumn("day_week", get_day_week(data_division("pdate")))
@@ -289,16 +240,9 @@ object FE_RF {
     val Long_2_Double =  udf[Double, Long]{xstr => xstr.toDouble}
     val money_near_last = udf[Double, Double]{xstr => any_to_double(xstr<=0.01)}
     data_division = data_division.withColumn("money_near_last",money_near_last(Long_2_Double(data_division("interval_money_1"))/Long_2_Double(data_division("trans_at"))))
-     
       
-    
-    
-    
     println("******************************cur stat************************************")
-    
-    
-  
-   
+     
     val udf_str_to_long = udf[Long, String]{xstr => xstr.toLong} 
     data_division = data_division.withColumn("pdate_long", udf_str_to_long(data_division("pdate")))
     
@@ -319,50 +263,8 @@ object FE_RF {
     
     //统计该卡当日上下笔平均间隔时间在5分钟内的次数
     data_division = data_division.withColumn("cur_freq_cnt", sum(when(data_division("quant_interval_1")<3, 1).otherwise(0)).over(W_cur))
-     
-      
-    
-    
-    //println("统计除当日外历史所有（不包括当日）内交易")
-    println("*******************************all history stat*********************************")
-    val W_hist = wd.rangeBetween(Long.MinValue, -1)  //除当日外历史所有
-    data_division = data_division.withColumn("hist_tot_amt", sum("trans_at").over(W_hist))
-    data_division = data_division.withColumn("hist_tot_cnt", count("trans_at").over(W_hist))  
-    data_division = data_division.withColumn("hist_max_amt", max("trans_at").over(W_hist)) 
-    data_division = data_division.withColumn("hist_min_amt", min("trans_at").over(W_hist))  
-    data_division = data_division.withColumn("hist_avg_amt", avg("trans_at").over(W_hist))  
  
-    //除当日外历史所有无交易记录标志
-    data_division = data_division.withColumn("hist_no_trans", when(data_division("hist_tot_cnt") === 0,1.0).otherwise(0.0))  
-    
-    
-    
-    //短时高频
-    println("*******************************frequent in short time*********************************")
-
-    val timestamp_in_min = udf[Double, String]{xstr => 
-      var st_time = format.parse("20171201000000").getTime().toDouble
-      var cur_time = format.parse(xstr).getTime().toDouble
-      (cur_time - st_time)/(1000*60)
-    }  
-    
-    data_division = data_division.withColumn("timestamp_in_min",  timestamp_in_min(data_division("trans_tm")))
-    
-    
-    //统计15分钟内
-    println("stat in 15 mins")
-    val wt_min = Window.partitionBy("pri_acct_no").orderBy("timestamp_in_min")
-    val W_min15 = wt_min.rangeBetween(-14,0)
-     
-    data_division = data_division.withColumn("min15_tot_amt", sum("trans_at").over(W_min15))
-    data_division = data_division.withColumn("min15_tot_cnt", count("trans_at").over(W_min15)) //15 min交易总次数
-    data_division = data_division.withColumn("min15_max_amt", max("trans_at").over(W_min15)) //15 min最大交易金额
-    data_division = data_division.withColumn("min15_min_amt", min("trans_at").over(W_min15)) //15 min最小交易金额
-    data_division = data_division.withColumn("min15_avg_amt", avg("trans_at").over(W_min15)) //15 min平均交易金额
-    
-    data_division = data_division.withColumn("min15_no_trans", when(data_division("min15_tot_cnt") === 1,1.0).otherwise(0.0))   //前15分钟无交易记录标志
-    
-    
+   
      //统计1小时内
     println("stat in 1 hours")
     val timestamp_in_hour = udf[Double, String]{xstr => 
@@ -371,7 +273,7 @@ object FE_RF {
       (cur_time - st_time)/(1000*60*60)
     } 
     
-    data_division = data_division.withColumn("timestamp_in_hour",  timestamp_in_min(data_division("trans_tm")))
+    data_division = data_division.withColumn("timestamp_in_hour",  timestamp_in_hour(data_division("trans_tm")))
     
     
     val wt_hour = Window.partitionBy("pri_acct_no").orderBy("timestamp_in_hour")
@@ -385,20 +287,12 @@ object FE_RF {
     
     data_division = data_division.withColumn("1hour_no_trans", when(data_division("1hour_tot_cnt") === 1,1.0).otherwise(0.0))  //前1 小时无交易记录标志
      
-  
     
     println(data_division.columns.mkString(","))
+    data_division.show(10)
     
     
-    ///////////////////////////////////////////////////////
-    //////////////////////////////////////////////////////
-    val CatVecArr = DisperseArr.map { x => x + "_CatVec"}
-    
-    val used_arr = IntelUtil.varUtil.ori_sus_Arr.++( IntelUtil.varUtil.calc_cols).++(CatVecArr)
-    
-    data_division = data_division.selectExpr(used_arr.+:("label").+:("division"):_*).cache()
-     
-    
+    val used_arr = IntelUtil.varUtil.used_sus_Arr.++(IntelUtil.varUtil.DisperseArr).++(IntelUtil.varUtil.calc_cols)
     data_division = data_division.na.fill(0, used_arr)
     data_division = data_division.na.drop()
     
@@ -408,16 +302,17 @@ object FE_RF {
      
     data_division = assembler1.transform(data_division)
     println("assembler1 dataframe")
+    
+    
+    val label_indexer = new StringIndexer()
+     .setInputCol("label")
+     .setOutputCol("label_idx")
+     .fit(data_division)  
+     
+    data_division = label_indexer.transform(data_division)
+    
     data_division.show(10) 
-      
-      
-    val normalizer1 = new Normalizer().setInputCol("featureVector").setOutputCol("normFeatures")     //默认是L2
-    data_division = normalizer1.transform(data_division)
-     
-    println("normalizer dataframe")
-
-    data_division.show(10)
-     
+    
     var normal_train = data_division.filter(data_division("division")=== "normal_train")
     var normal_test = data_division.filter(data_division("division")=== "normal_test")
     var fraud_train = data_division.filter(data_division("division")=== "fraud_train")
@@ -428,25 +323,21 @@ object FE_RF {
     
     data_division.unpersist(blocking=false)
     
-    println("trainingData.count: ", trainingData.count, " testData.count: ", testData.count)
-     
-    trainingData.selectExpr(used_arr.+:("label"):_*).rdd.map(_.mkString(",")).saveAsTextFile("xrli/QRfraud/trainingData_new")
-    testData.selectExpr(used_arr.+:("label"):_*).rdd.map(_.mkString(",")).saveAsTextFile("xrli/QRfraud/testData_new")
-     
+    println("process done in " + (System.currentTimeMillis()-startTime)/(1000*60) + " minutes." )  
     
-     
-    println("Save done in " + (System.currentTimeMillis()-startTime)/(1000*60) + " minutes." )  
     val rfClassifier = new RandomForestClassifier()
-        .setLabelCol("label")
+        .setLabelCol("label_idx")
         .setFeaturesCol("featureVector")
         .setNumTrees(200)
         .setSubsamplingRate(0.7)
         .setFeatureSubsetStrategy("auto")
-        .setThresholds(Array(180,1))
+        .setThresholds(Array(1,1))
          
         .setImpurity("gini")
         .setMaxDepth(5)
         .setMaxBins(10000)
+//        .setPredictionCol("prediction")    默认名，不用设
+//        .setProbabilityCol("probability")
      
        
       
@@ -457,26 +348,11 @@ object FE_RF {
   
        
     val predictionResult = model.transform(testData)
-        
-    val eval_result = IntelUtil.funUtil.get_CF_Matrix(predictionResult)
-     
-    println("Current Precision_P is: " + eval_result.Precision_P)
-    println("Current Recall_P is: " + eval_result.Recall_P)
-      
-    val evaluator = new BinaryClassificationEvaluator().setLabelCol("label").setMetricName("areaUnderROC")
-       
-    val accuracy = evaluator.evaluate(predictionResult) //AUC
     
-    println("accuracy is: " + accuracy)
-    
-     
-    val featureImportance = model.featureImportances.toSparse
-    val topFeatures = used_arr.zip(featureImportance.values).sortBy( - _._2) 
-    
-    topFeatures.foreach(println)
-
-
-
+    predictionResult.show(100)
+    predictionResult.select("label_idx", "probability").rdd.map(_.mkString(",")).saveAsTextFile("xrli/QRfraud/predictionResult")
+    println("predictionResult save done in " + (System.currentTimeMillis()-startTime)/(1000*60) + " minutes." )  
+  
     println("FE done in " + (System.currentTimeMillis()-startTime)/(1000*60) + " minutes." )  
   }
    
