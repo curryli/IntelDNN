@@ -323,15 +323,17 @@ object testMetric {
     
     data_division.unpersist(blocking=false)
     
+     
+    
     println("process done in " + (System.currentTimeMillis()-startTime)/(1000*60) + " minutes." )  
     
     val rfClassifier = new RandomForestClassifier()
         .setLabelCol("label_idx")
         .setFeaturesCol("featureVector")
-        .setNumTrees(200)
-        .setSubsamplingRate(0.7)
+        .setNumTrees(100)
+        .setSubsamplingRate(0.5)
         .setFeatureSubsetStrategy("auto")
-        .setThresholds(Array(1,1))
+        .setThresholds(Array(10,1))
          
         .setImpurity("gini")
         .setMaxDepth(5)
@@ -350,8 +352,15 @@ object testMetric {
     val predictionResult = model.transform(testData)
     
     predictionResult.show(100)
-    predictionResult.select("label_idx", "probability").rdd.map(_.mkString(",")).saveAsTextFile("xrli/QRfraud/predictionResult")
+    predictionResult.select("label_idx", "probability","prediction").rdd.map(_.mkString(",")).saveAsTextFile("xrli/QRfraud/predictionResult2")
     println("predictionResult save done in " + (System.currentTimeMillis()-startTime)/(1000*60) + " minutes." )  
+     
+    
+    val evaluator = new BinaryClassificationEvaluator().setLabelCol("label_idx").setMetricName("areaUnderROC")    
+    val AUC = evaluator.evaluate(predictionResult) //AUC
+    println("AUC is: " + AUC)
+    
+   
   
     println("FE done in " + (System.currentTimeMillis()-startTime)/(1000*60) + " minutes." )  
   }
