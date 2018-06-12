@@ -286,10 +286,10 @@ object testMetric {
     data_division = data_division.withColumn("1hour_avg_amt", avg("trans_at").over(W_hour1)) // 1 hour平均交易金额
     
     data_division = data_division.withColumn("1hour_no_trans", when(data_division("1hour_tot_cnt") === 1,1.0).otherwise(0.0))  //前1 小时无交易记录标志
-     
-    
-    println(data_division.columns.mkString(","))
-    data_division.show(10)
+//     
+//    
+//    println(data_division.columns.mkString(","))
+//    data_division.show(10)
     
     
     val used_arr = IntelUtil.varUtil.used_sus_Arr.++(IntelUtil.varUtil.DisperseArr).++(IntelUtil.varUtil.calc_cols)
@@ -327,13 +327,28 @@ object testMetric {
     
     println("process done in " + (System.currentTimeMillis()-startTime)/(1000*60) + " minutes." )  
     
-    val rfClassifier = new RandomForestClassifier()
+//    val rfClassifier = new RandomForestClassifier()
+//        .setLabelCol("label_idx")
+//        .setFeaturesCol("featureVector")
+//        .setNumTrees(100)
+//        .setSubsamplingRate(0.5)
+//        .setFeatureSubsetStrategy("auto")
+//        .setThresholds(Array(10,1))
+//         
+//        .setImpurity("gini")
+//        .setMaxDepth(5)
+//        .setMaxBins(10000)
+////        .setPredictionCol("prediction")    默认名，不用设
+////        .setProbabilityCol("probability")
+    
+    
+        val rfClassifier = new RandomForestClassifier()
         .setLabelCol("label_idx")
         .setFeaturesCol("featureVector")
-        .setNumTrees(100)
+        .setNumTrees(20)
         .setSubsamplingRate(0.5)
         .setFeatureSubsetStrategy("auto")
-        .setThresholds(Array(10,1))
+        .setThresholds(Array(100,1))
          
         .setImpurity("gini")
         .setMaxDepth(5)
@@ -351,8 +366,8 @@ object testMetric {
        
     val predictionResult = model.transform(testData)
     
-    predictionResult.show(100)
-    predictionResult.select("label_idx", "probability","prediction").rdd.map(_.mkString(",")).saveAsTextFile("xrli/QRfraud/predictionResult2")
+//    predictionResult.show(100)
+//    predictionResult.select("label_idx", "probability","prediction").rdd.map(_.mkString(",")).saveAsTextFile("xrli/QRfraud/predictionResult2")
     println("predictionResult save done in " + (System.currentTimeMillis()-startTime)/(1000*60) + " minutes." )  
      
     
@@ -360,8 +375,21 @@ object testMetric {
     val AUC = evaluator.evaluate(predictionResult) //AUC
     println("AUC is: " + AUC)
     
-   
-  
+     
+    val featureImportance = model.featureImportances.toSparse
+     
+//    println(used_arr.mkString(","))
+//  
+//    featureImportance.toArray.zipWithIndex
+//            .map(_.swap)
+//            .sortBy(-_._2)
+//            .foreach(x => println(x._1 + " -> " + x._2))
+     
+    val sortedFeatures = used_arr.zip(featureImportance.toArray).sortBy(-_._2)    //(-_._2)
+    sortedFeatures.foreach(println)
+     
+    println(model.toDebugString)
+     
     println("FE done in " + (System.currentTimeMillis()-startTime)/(1000*60) + " minutes." )  
   }
    
